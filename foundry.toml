@@ -1,0 +1,9 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+test = "test"
+test_pattern = "test/*.t.sol"  # Only run tests in test directory
+script_pattern = "script/*.s.sol"  # Scripts in script directory
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
