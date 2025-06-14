@@ -74,11 +74,11 @@ contract TestWBTC is Test {
         uint32 index = 1;
         uint32 duration = 86400; // 1 day
         
-        // Mint WBTC to USER_2
-        wbtcToken.ownerMint(USER_2, mintAmount, txid, index, duration);
+        // Mint WBTC to owner's address
+        wbtcToken.ownerMint(mintAmount, txid, index, duration);
         
         // Verify balances
-        assertEq(wbtcToken.balanceOf(USER_2), mintAmount);
+        assertEq(wbtcToken.balanceOf(USER_0), mintAmount);
         
         // Check maximum burn amount
         uint256 maxBurnAmount = wbtcToken.getMaxOwnerBurnAmount();
@@ -87,15 +87,15 @@ contract TestWBTC is Test {
         // Burn half
         uint256 burnAmount = 1 * 10**18;
         bytes32 burnTxid = keccak256("test_tx_2");
-        wbtcToken.ownerBurn(USER_2, burnAmount, burnTxid);
+        wbtcToken.ownerBurn(burnAmount, burnTxid);
         
         // Verify balances after burn
-        assertEq(wbtcToken.balanceOf(USER_2), mintAmount - burnAmount);
+        assertEq(wbtcToken.balanceOf(USER_0), mintAmount - burnAmount);
         
         // Try to burn more than max amount (should fail)
         bytes32 failTxid = keccak256("test_tx_3");
         vm.expectRevert("Insufficient WBTC balance");
-        wbtcToken.ownerBurn(USER_2, maxBurnAmount + 1, failTxid);
+        wbtcToken.ownerBurn(maxBurnAmount + 1, failTxid);
         
         vm.stopPrank();
     }
@@ -104,9 +104,9 @@ contract TestWBTC is Test {
         // Start acting as owner
         vm.startPrank(USER_0);
         
-        // Mint some WBTC
+        // Mint some WBTC to owner's address
         uint256 mintAmount = 5 * 10**18;
-        wbtcToken.ownerMint(USER_2, mintAmount, keccak256("tx1"), 1, 86400);
+        wbtcToken.ownerMint(mintAmount, keccak256("tx1"), 1, 86400);
         
         // Verify max burn amount (should be 5 WBTC since no BTC is locked yet)
         assertEq(wbtcToken.getMaxOwnerBurnAmount(), mintAmount);

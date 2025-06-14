@@ -77,14 +77,12 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
     
     /**
      * @dev Owner-only function to mint WBTC without requiring BTC
-     * @param to Address to mint WBTC to
      * @param amount Amount of WBTC to mint
      * @param txid 32-byte transaction ID
      * @param index Index of the output
      * @param duration Duration in seconds
      */
     function ownerMint(
-        address to, 
         uint256 amount, 
         bytes32 txid, 
         uint32 index, 
@@ -97,10 +95,10 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
         // Mark txid as used
         usedTxids[txid] = true;
         
-        // Mint the tokens
-        _mint(to, amount);
+        // Mint the tokens to the owner's address
+        _mint(msg.sender, amount);
         
-        emit OwnerMinted(to, amount, txid, index, duration);
+        emit OwnerMinted(msg.sender, amount, txid, index, duration);
     }
 
     /**
@@ -116,18 +114,16 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
 
     /**
      * @dev Owner-only function to burn WBTC without returning BTC
-     * @param from Address to burn WBTC from
      * @param amount Amount of WBTC to burn
      * @param txid 32-byte transaction ID for tracking
      */
     function ownerBurn(
-        address from,
         uint256 amount,
         bytes32 txid
     ) external onlyOwner {
         require(amount > 0, "Amount must be greater than 0");
         require(!usedTxids[txid], "Transaction ID already used");
-        require(balanceOf(from) >= amount, "Insufficient WBTC balance");
+        require(balanceOf(msg.sender) >= amount, "Insufficient WBTC balance");
         
         // Check if the burn amount exceeds the maximum allowed
         uint256 maxBurnAmount = getMaxOwnerBurnAmount();
@@ -136,10 +132,10 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
         // Mark txid as used
         usedTxids[txid] = true;
         
-        // Burn the tokens
-        _burn(from, amount);
+        // Burn the tokens from owner's address
+        _burn(msg.sender, amount);
         
-        emit OwnerBurned(from, amount, txid);
+        emit OwnerBurned(msg.sender, amount, txid);
     }
     
     /**
