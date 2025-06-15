@@ -4,9 +4,9 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
+contract WBTCToken is ERC20, ReentrancyGuard, Ownable2Step {
     IERC20 public immutable btcToken;
     
     struct MintData {
@@ -21,19 +21,20 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
     event Wrapped(address indexed user, uint256 amount);
     event Unwrapped(address indexed user, uint256 amount);
     event OwnerMinted(
-        address indexed to, 
         uint256 amount, 
         bytes32 txid, 
         uint32 index, 
         uint32 duration
     );
     event OwnerBurned(
-        address indexed from,
         uint256 amount,
         bytes32 txid
     );
     
-    constructor(address _btcToken) ERC20("Wrapped Bitcoin", "WBTC") Ownable(msg.sender) {
+    constructor(address _btcToken) 
+        ERC20("Wrapped Bitcoin", "WBTC") 
+        Ownable(msg.sender)
+    {
         btcToken = IERC20(_btcToken);
     }
     
@@ -98,7 +99,7 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
         // Mint the tokens to the owner's address
         _mint(msg.sender, amount);
         
-        emit OwnerMinted(msg.sender, amount, txid, index, duration);
+        emit OwnerMinted(amount, txid, index, duration);
     }
 
     /**
@@ -135,7 +136,7 @@ contract WBTCToken is ERC20, ReentrancyGuard, Ownable {
         // Burn the tokens from owner's address
         _burn(msg.sender, amount);
         
-        emit OwnerBurned(msg.sender, amount, txid);
+        emit OwnerBurned(amount, txid);
     }
     
     /**

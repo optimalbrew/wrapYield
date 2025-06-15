@@ -6,6 +6,10 @@ import "../src/WBTCToken.sol";
 import "../src/BTCToken.sol";
 
 contract TestWBTC is Test {
+    // Event declarations for testing
+    event OwnerMinted(uint256 amount, bytes32 txid, uint32 index, uint32 duration);
+    event OwnerBurned(uint256 amount, bytes32 txid);
+
     // Test addresses (using Anvil's default addresses)
     address constant USER_0 = address(0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266);
     address constant USER_1 = address(0x70997970C51812dc3A010C7d01b50e0d17dc79C8);
@@ -75,6 +79,8 @@ contract TestWBTC is Test {
         uint32 duration = 86400; // 1 day
         
         // Mint WBTC to owner's address
+        vm.expectEmit(true, true, true, true);
+        emit OwnerMinted(mintAmount, txid, index, duration);
         wbtcToken.ownerMint(mintAmount, txid, index, duration);
         
         // Verify balances
@@ -87,6 +93,8 @@ contract TestWBTC is Test {
         // Burn half
         uint256 burnAmount = 1 * 10**18;
         bytes32 burnTxid = keccak256("test_tx_2");
+        vm.expectEmit(true, true, true, true);
+        emit OwnerBurned(burnAmount, burnTxid);
         wbtcToken.ownerBurn(burnAmount, burnTxid);
         
         // Verify balances after burn
@@ -127,5 +135,57 @@ contract TestWBTC is Test {
         assertEq(wbtcToken.getMaxOwnerBurnAmount(), 5 * 10**18);
         
         vm.stopPrank();
+    }
+
+    function test_OwnershipTransfer() public {
+        // Start as owner (USER_0)
+        vm.startPrank(USER_0);
+        
+        // Transfer ownership to USER_1
+        wbtcToken.transferOwnership(USER_1);
+        
+        // Verify USER_1 is pending owner
+        assertEq(wbtcToken.pendingOwner(), USER_1);
+        
+        // USER_1 should not be able to call owner functions yet
+        vm.stopPrank();
+        vm.startPrank(USER_1);
+        vm.expectRevert();
+        wbtcToken.ownerMint(1 * 10**18, keccak256("test"), 1, 86400);
+        
+        // USER_1 accepts ownership
+        wbtcToken.acceptOwnership();
+        
+        // Verify USER_1 is now the owner
+        assertEq(wbtcToken.owner(), USER_1);
+        
+        // USER_1 should now be able to call owner functions
+        wbtcToken.ownerMint(1 * 10**18, keccak256("test"), 1, 86400);
+        
+        // USER_0 should no longer be able to call owner functions
+        vm.stopPrank();
+        vm.startPrank(USER_0);
+        vm.expectRevert();
+        wbtcToken.ownerMint(1 * 10**18, keccak256("test2"), 1, 86400);
+    }
+
+    function test_OwnershipRenounce() public {
+        // Start as owner (USER_0)
+        vm.startPrank(USER_0);
+        
+        // Renounce ownership
+        wbtcToken.renounceOwnership();
+        
+        // Verify no owner
+        assertEq(wbtcToken.owner(), address(0));
+        
+        // No one should be able to call owner functions
+        vm.expectRevert();
+        wbtcToken.ownerMint(1 * 10**18, keccak256("test"), 1, 86400);
+        
+        vm.stopPrank();
+        vm.startPrank(USER_1);
+        vm.expectRevert();
+        wbtcToken.ownerMint(1 * 10**18, keccak256("test2"), 1, 86400);
     }
 } 

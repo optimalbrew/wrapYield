@@ -1,4 +1,8 @@
-# Components for a BTC yiled project
+# Components for a BTC yield project
+
+The objective is to build a managed yield solution that accepts deposits in wrapped Bitcoin (`WBTC`). The `WBTC` will be in erc20 format. BTC deposits can be accepted from users in the form of pre-existing `BTC` tokens. Users can burn the tokens to unwrap and recover the underlying base token.
+
+The protocol owner (the operator) has special powers and can mint them directly without depositing any underlying tokens. the assumption is that some users have locked correspoinding BTC on some other chain. When minting tokens on behalf of such users the owner must post information about BTC locked up on some other chain. For instance, this can be information about a Bitcoin UTXO where the tokens have been locked, and the duration (timelock) before which they cannot be consumed. These `ownerMint`-ed tokens will not be transferred to the users and will remain associated with the owner's address. When a user from the other chain wants to exit the managed portfolio, the protocol operator can burn these tokens.  Rewards (yield) will be paid in another token `PRZ`.
 
 ## Install Foundry
 
