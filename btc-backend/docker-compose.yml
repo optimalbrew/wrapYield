@@ -1,0 +1,26 @@
+
+services:
+  bitcoind:
+    image: ruimarinho/bitcoin-core #arm64
+    #image: kylemanna/bitcoind #amd64
+    container_name: bitcoind-regtest
+    ports:
+      - "18443:18443"
+      - "18444:18444"
+    command:
+      -regtest
+      -rpcbind=0.0.0.0
+      -rpcallowip=0.0.0.0/0
+      -rpcuser=bitcoin
+      -rpcpassword=localtest
+      -server=1
+      -txindex=1
+      -disablewallet=0
+      -fallbackfee=0.0002
+      -printtoconsole
+    volumes:
+      - ./data/bitcoind:/bitcoin/.bitcoin
+    #networks: 
+    #  - bitcoin-regtest
+
+      
