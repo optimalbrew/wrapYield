@@ -1,0 +1,24 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# IDE files
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Cargo
+Cargo.lock
+Cargo.toml.bak
+
+# Logs
+*.log
+logs/
+
+#misc
+fix.txt
