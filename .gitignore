@@ -21,3 +21,4 @@ btc-backend/data/*
 
 #osx
 .DS_Store
+*/.DS_Store
