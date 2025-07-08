@@ -16,6 +16,15 @@ impl BitcoinRPC {
         let auth = base64::engine::general_purpose::STANDARD.encode("bitcoin:localtest");
         Self { url, client, auth }
     }
+
+    pub fn with_wallet(&self, wallet: &str) -> Self {
+        let url = format!("{}/wallet/{}", self.url.trim_end_matches('/'), wallet);
+        Self {
+            url,
+            client: self.client.clone(),
+            auth: self.auth.clone(),
+        }
+    }
     pub async fn call_rpc(&self, method: &str, params: serde_json::Value) -> Result<Value, Box<dyn std::error::Error>> {
         let req = json!({
             "jsonrpc": "1.0",
