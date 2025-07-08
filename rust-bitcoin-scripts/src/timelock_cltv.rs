@@ -30,4 +30,22 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let timelock_address = timelock_descriptor.address(Network::Regtest)?;
     println!("Timelock Regtest Address: {}", timelock_address);
     Ok(())
+}
+
+/// Generate a simple CLTV descriptor and address for a single key and block height
+pub fn simple_cltv_descriptor(block_height: u32) -> (Descriptor<PublicKey>, PrivateKey, PublicKey, String) {
+    let secp = secp256k1::Secp256k1::new();
+    let key = {
+        let mut data = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut data);
+        secp256k1::SecretKey::from_slice(&data).unwrap()
+    };
+    let privkey = PrivateKey::new(key, Network::Regtest);
+    let pubkey = PublicKey::from_private_key(&secp, &privkey);
+    let descriptor_str = format!("wsh(and_v(pk({}),after({})))", pubkey, block_height);
+    let descriptor: Descriptor<PublicKey> = Descriptor::from_str(&descriptor_str).unwrap();
+    let address = descriptor.address(Network::Regtest).unwrap().to_string();
+    println!("Simple CLTV Descriptor: {}", descriptor_str);
+    println!("Simple CLTV Address: {}", address);
+    (descriptor, privkey, pubkey, address)
 } 

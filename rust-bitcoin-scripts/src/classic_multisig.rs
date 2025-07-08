@@ -3,7 +3,7 @@ use rand::RngCore;
 use std::str::FromStr;
 
 fn random_secret_key() -> secp256k1::SecretKey {
-    let mut data = [0u8; 32];
+    let mut data = [0u8; 32]; //bytearray of length 32
     rand::thread_rng().fill_bytes(&mut data);
     secp256k1::SecretKey::from_slice(&data).unwrap()
 }

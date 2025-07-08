@@ -22,4 +22,4 @@ Cargo.toml.bak
 logs/
 
 #misc
-fix.txt
+*.txt
