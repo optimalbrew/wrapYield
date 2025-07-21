@@ -11,7 +11,7 @@ fn random_secret_key() -> secp256k1::SecretKey {
 pub struct MultisigInfo {
     pub address: String,
     pub descriptor: String,
-    pub private_keys: Vec<PrivateKey>,
+    pub private_keys: Vec<PrivateKey>, //for testing only
     pub public_keys: Vec<PublicKey>,
 }
 
@@ -44,4 +44,15 @@ pub fn create_multisig() -> Result<MultisigInfo, Box<dyn std::error::Error>> {
         private_keys: vec![privkey1, privkey2, privkey3],
         public_keys: vec![pubkey1, pubkey2, pubkey3],
     })
-} 
+}
+
+pub fn create_redeem_script(public_keys: &[PublicKey]) -> bitcoin::ScriptBuf {
+    let mut builder = bitcoin::script::Builder::new();
+    builder = builder.push_int(2);
+    for pubkey in public_keys {
+        builder = builder.push_slice(pubkey.inner.serialize());
+    }
+    builder = builder.push_int(3);
+    builder = builder.push_opcode(bitcoin::opcodes::all::OP_CHECKMULTISIG);
+    builder.into_script()
+}

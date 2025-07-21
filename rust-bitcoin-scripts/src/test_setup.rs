@@ -95,14 +95,3 @@ impl BitcoinRPC {
         Ok(())
     }
 }
-
-pub fn create_redeem_script(public_keys: &[PublicKey]) -> bitcoin::ScriptBuf {
-    let mut builder = bitcoin::script::Builder::new();
-    builder = builder.push_int(2);
-    for pubkey in public_keys {
-        builder = builder.push_slice(pubkey.inner.serialize());
-    }
-    builder = builder.push_int(3);
-    builder = builder.push_opcode(bitcoin::opcodes::all::OP_CHECKMULTISIG);
-    builder.into_script()
-} 

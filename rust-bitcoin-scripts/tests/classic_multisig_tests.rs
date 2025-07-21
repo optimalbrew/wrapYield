@@ -1,5 +1,5 @@
-use bitcoin_scripts::test_setup::{BitcoinRPC, create_redeem_script};
-use bitcoin_scripts::classic_multisig::create_multisig;
+use bitcoin_scripts::test_setup::{BitcoinRPC};
+use bitcoin_scripts::classic_multisig::{create_multisig, create_redeem_script};
 use miniscript::bitcoin::Network;
 use hex;
 use serde_json::json;
