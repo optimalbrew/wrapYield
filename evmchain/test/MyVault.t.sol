@@ -28,6 +28,7 @@ contract MyVaultTest is Test {
     function testMint() public {
         weth.approve(address(vault), 2 ether);
         uint256 assets = vault.previewMint(2 ether);
+        assertEq(assets, 2 ether);
         uint256 shares = vault.mint(2 ether, address(this));
         assertEq(shares, 2 ether);
         assertEq(vault.balanceOf(address(this)), 2 ether);
