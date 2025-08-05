@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.30;
 
 //https://docs.openzeppelin.com/contracts/5.x/erc4626#defending_with_a_virtual_offset
 /**
