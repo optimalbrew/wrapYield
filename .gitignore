@@ -1,11 +1,11 @@
 # Compiler files
-cache/
-out/
+evmchain/cache/
+evmchain/out/
 
 # Ignores development broadcast logs
 !/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+evmchain/broadcast/*/31337/
+evmchain/broadcast/**/dry-run/
 
 # Docs
 docs/
@@ -22,3 +22,5 @@ btc-backend/data/*
 #osx
 *DS_Store
 */.DS_Store
+
+evmchain/.env/
