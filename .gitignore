@@ -13,8 +13,7 @@ docs/
 # Dotenv file
 .env
 
-# Github: don't run tests?
-#.github/workflows/test.yml
+
 
 # btc backend data
 btc-backend/data/*

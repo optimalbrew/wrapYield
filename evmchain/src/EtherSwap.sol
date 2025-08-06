@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-// Source https://github.com/BoltzExchange/boltz-core
-// Which has MIT license 
+// Modified from https://github.com/BoltzExchange/boltz-core
+// Which has MIT license
+// modified so it can only be called from the authorized contract (the loan contract)
+// must be deployed with the authorized contract address (deploy loan contract first)
 
 pragma solidity ^0.8.30;
 
@@ -20,6 +22,9 @@ contract EtherSwap {
 
     // State variables
 
+    /// @dev Address of the authorized loan contract that can call this contract
+    address public immutable authorizedContract;
+    
     /// @dev Mapping between value hashes of swaps and whether they have Ether locked in the contract
     mapping(bytes32 => bool) public swaps;
 
@@ -36,14 +41,24 @@ contract EtherSwap {
     event Claim(bytes32 indexed preimageHash, bytes32 preimage);
     event Refund(bytes32 indexed preimageHash);
 
+    // Modifiers
+
+    /// @dev Modifier to restrict access to only the authorized loan contract
+    modifier onlyAuthorized() {
+        require(msg.sender == authorizedContract, "EtherSwap: caller is not authorized");
+        _;
+    }
+
     // Functions
 
-    constructor() {
+    constructor(address _authorizedContract) {
+        require(_authorizedContract != address(0), "EtherSwap: invalid authorized contract address");
+        authorizedContract = _authorizedContract;
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256("EtherSwap"),
-                keccak256("5"),
+                keccak256("EtherSwapModLoan"),
+                //keccak256("5"),
                 block.chainid,
                 address(this)
             )
@@ -61,7 +76,7 @@ contract EtherSwap {
     /// @param preimageHash Preimage hash of the swap
     /// @param claimAddress Address that can claim the locked Ether
     /// @param timelock Block height after which the locked Ether can be refunded
-    function lock(bytes32 preimageHash, address claimAddress, uint256 timelock) external payable {
+    function lock(bytes32 preimageHash, address claimAddress, uint256 timelock) external payable onlyAuthorized {
         lockEther(preimageHash, msg.value, claimAddress, timelock);
     }
 
@@ -77,7 +92,7 @@ contract EtherSwap {
         address payable claimAddress,
         uint256 timelock,
         uint256 prepayAmount
-    ) external payable {
+    ) external payable onlyAuthorized {
         // Revert on underflow in next statement
         require(msg.value > prepayAmount, "EtherSwap: sent amount must be greater than the prepay amount");
 
@@ -94,7 +109,7 @@ contract EtherSwap {
     /// @param amount Amount locked in the contract for the swap in WEI
     /// @param refundAddress Address that locked the Ether in the contract
     /// @param timelock Block height after which the locked Ether can be refunded
-    function claim(bytes32 preimage, uint256 amount, address refundAddress, uint256 timelock) external {
+    function claim(bytes32 preimage, uint256 amount, address refundAddress, uint256 timelock) external onlyAuthorized {
         // Passing "msg.sender" as "claimAddress" to "hashValues" ensures that only the destined address can claim
         // All other addresses would produce a different hash for which no swap can be found in the "swaps" mapping
         claim(preimage, amount, msg.sender, refundAddress, timelock);
@@ -121,7 +136,7 @@ contract EtherSwap {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external returns (address) {
+    ) external onlyAuthorized returns (address) {
         address claimAddress = ecrecover(
             keccak256(
                 abi.encodePacked(
@@ -152,7 +167,7 @@ contract EtherSwap {
         uint256[] calldata amounts,
         address[] calldata refundAddresses,
         uint256[] calldata timelocks
-    ) external {
+    ) external onlyAuthorized {
         uint256 toSend = 0;
         uint256 swapAmount = 0;
 
@@ -177,7 +192,7 @@ contract EtherSwap {
     /// @param amount Amount locked in the contract for the swap in WEI
     /// @param claimAddress Address that that was destined to claim the funds
     /// @param timelock Block height after which the locked Ether can be refunded
-    function refund(bytes32 preimageHash, uint256 amount, address claimAddress, uint256 timelock) external {
+    function refund(bytes32 preimageHash, uint256 amount, address claimAddress, uint256 timelock) external onlyAuthorized {
         refund(preimageHash, amount, claimAddress, msg.sender, timelock);
     }
 
@@ -199,7 +214,7 @@ contract EtherSwap {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) external {
+    ) external onlyAuthorized {
         address recoveredAddress = ecrecover(
             keccak256(
                 abi.encodePacked(

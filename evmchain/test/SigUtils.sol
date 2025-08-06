@@ -1,5 +1,5 @@
 // Source https://github.com/BoltzExchange/boltz-core
-// Which has MIT license 
+// Which has MIT license
 
 // SPDX-License-Identifier: MIT
 

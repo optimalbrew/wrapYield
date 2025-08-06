@@ -18,7 +18,7 @@ contract WETH is ERC20 {
     function withdraw(uint256 amount) external {
         require(balanceOf(msg.sender) >= amount, "Insufficient WETH");
         _burn(msg.sender, amount);
-        (bool sent, ) = msg.sender.call{value: amount}("");
+        (bool sent,) = msg.sender.call{value: amount}("");
         require(sent, "ETH transfer failed");
     }
 
@@ -27,4 +27,4 @@ contract WETH is ERC20 {
         require(msg.value > 0, "No ETH sent");
         _mint(msg.sender, msg.value);
     }
-} 
+}

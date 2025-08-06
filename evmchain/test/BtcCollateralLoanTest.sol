@@ -1,0 +1,528 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.30;
+
+import "../lib/forge-std/src/Test.sol";
+import "../src/BtcCollateralLoan.sol";
+import "../src/EtherSwap.sol";
+import "../src/LoanFactory.sol";
+
+contract BtcCollateralLoanTest is Test {
+    BtcCollateralLoan public loan;
+    EtherSwap public etherSwap;
+    LoanFactory public factory;
+    
+    address public lender;
+    address public borrower;
+    address public borrower2;
+    
+    // Test data - 32 bytes each
+    string public constant LENDER_BTC_PUBKEY = "12345678901234567890123456789012";
+    string public constant BORROWER_BTC_PUBKEY = "abcdef0123456789abcdef0123456789";
+    string public constant BORROWER_BTC_ADDRESS = "bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5j";
+    
+    uint256 public constant LOAN_AMOUNT = 1 ether;
+    uint256 public constant PROCESSING_FEE = 0.001 ether;
+    uint256 public constant MIN_LOAN_AMOUNT = 0.005 ether;
+    
+    // Timelocks (in blocks)
+    uint256 public constant TIMELOCK_LOAN_REQ = 100;
+    uint256 public constant TIMELOCK_BTC_ESCROW = 200;
+    uint256 public constant TIMELOCK_REPAYMENT_ACCEPT = 150;
+    uint256 public constant TIMELOCK_BTC_COLLATERAL = 250;
+    
+    // Preimages and hashes
+    bytes32 public preimageBorrower = keccak256("borrower_preimage");
+    bytes32 public preimageLender = keccak256("lender_preimage");
+    bytes32 public preimageHashBorrower = sha256(abi.encodePacked(preimageBorrower));
+    bytes32 public preimageHashLender = sha256(abi.encodePacked(preimageLender));
+    
+    event LoanRequested(uint256 indexed loanId, address indexed borrower, uint256 amount, string btcAddress);
+    event LoanOffered(uint256 indexed loanId, address indexed lender, uint256 amount, uint256 bondAmount);
+    event LoanActivated(uint256 indexed loanId, address indexed borrower);
+    event RepaymentAttempted(uint256 indexed loanId, address indexed borrower, uint256 amount);
+    event RepaymentAccepted(uint256 indexed loanId, address indexed lender);
+    event LoanDeleted(uint256 indexed loanId, address indexed borrower);
+    event EtherSwapAddressSet(address indexed etherSwapAddress);
+
+    function setUp() public {
+        lender = makeAddr("lender");
+        borrower = makeAddr("borrower");
+        borrower2 = makeAddr("borrower2");
+        
+        // Fund test accounts with ETH
+        vm.deal(lender, 100 ether);
+        vm.deal(borrower, 100 ether);
+        vm.deal(borrower2, 100 ether);
+        
+        // Deploy factory and contracts as lender
+        factory = new LoanFactory();
+        vm.startPrank(lender);
+        (address etherSwapAddress, address loanAddress) = factory.deployContracts(
+            LENDER_BTC_PUBKEY,
+            TIMELOCK_LOAN_REQ,
+            TIMELOCK_BTC_ESCROW,
+            TIMELOCK_REPAYMENT_ACCEPT,
+            TIMELOCK_BTC_COLLATERAL
+        );
+        vm.stopPrank();
+        
+        loan = BtcCollateralLoan(payable(loanAddress));
+        etherSwap = EtherSwap(etherSwapAddress);
+    }
+
+    // ============ HELPER FUNCTIONS ============
+
+    function assertLoanStatus(BtcCollateralLoan.Loan memory loanData, BtcCollateralLoan.LoanStatus expectedStatus) internal pure {
+        assertEq(uint8(loanData.status), uint8(expectedStatus));
+    }
+
+    function requestLoan(address _borrower, uint256 _amount) internal returns (uint256) {
+        vm.startPrank(_borrower);
+        loan.requestLoan{value: PROCESSING_FEE}(
+            _amount,
+            BORROWER_BTC_ADDRESS,
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        uint256 loanId = loan.getTotalLoans();
+        vm.stopPrank();
+        return loanId;
+    }
+
+    function offerLoan(uint256 _loanId) internal {
+        vm.startPrank(lender);
+        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+            _loanId,
+            preimageHashBorrower,
+            preimageHashLender
+        );
+        vm.stopPrank();
+    }
+
+    function acceptLoan(uint256 _loanId) internal {
+        vm.startPrank(borrower);
+        loan.acceptLoanOffer(_loanId, preimageBorrower);
+        vm.stopPrank();
+    }
+
+    function attemptRepayment(uint256 _loanId) internal {
+        vm.startPrank(borrower);
+        loan.attemptRepayment{value: LOAN_AMOUNT}(_loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    // ============ CONSTRUCTOR TESTS ============
+
+    function testConstructor() public {
+        assertEq(loan.lenderBtcPubkey(), LENDER_BTC_PUBKEY);
+        assertEq(loan.timelockLoanReq(), TIMELOCK_LOAN_REQ);
+        assertEq(loan.timelockBtcEscrow(), TIMELOCK_BTC_ESCROW);
+        assertEq(loan.timelockRepaymentAccept(), TIMELOCK_REPAYMENT_ACCEPT);
+        assertEq(loan.timelockBtcCollateral(), TIMELOCK_BTC_COLLATERAL);
+        assertEq(loan.getTotalLoans(), 0);
+    }
+
+    function testConstructorInvalidBtcPubkey() public {
+        vm.expectRevert("Loan: invalid BTC Schnorr (x only) pubkey");
+        new BtcCollateralLoan(
+            "0x123456789012345678901234567890123456789012345678901234567890123", // 31 bytes
+            TIMELOCK_LOAN_REQ,
+            TIMELOCK_BTC_ESCROW,
+            TIMELOCK_REPAYMENT_ACCEPT,
+            TIMELOCK_BTC_COLLATERAL
+        );
+    }
+
+    // ============ SETTER TESTS ============
+
+    function testSetEtherSwapAddressAlreadySet() public {
+        address newEtherSwap = makeAddr("newEtherSwap");
+        
+        vm.startPrank(lender);
+        vm.expectRevert("Loan: EtherSwap address already set");
+        loan.setEtherSwapAddress(newEtherSwap);
+        vm.stopPrank();
+    }
+
+    // ============ LOAN REQUEST TESTS ============
+
+    function testRequestLoan() public {
+        vm.startPrank(borrower);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LoanRequested(1, borrower, LOAN_AMOUNT, BORROWER_BTC_ADDRESS);
+        
+        loan.requestLoan{value: PROCESSING_FEE}(
+            LOAN_AMOUNT,
+            BORROWER_BTC_ADDRESS,
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        
+        vm.stopPrank();
+        
+        assertEq(loan.getTotalLoans(), 1);
+        assertEq(loan.getLoanIdByBorrower(borrower), 1);
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(1);
+        assertEq(loanData.borrowerAddr, borrower);
+        assertEq(loanData.amount, LOAN_AMOUNT);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Requested);
+    }
+
+    function testRequestLoanInsufficientFee() public {
+        vm.startPrank(borrower);
+        
+        vm.expectRevert("Loan: insufficient processing fee");
+        loan.requestLoan{value: PROCESSING_FEE - 0.0001 ether}(
+            LOAN_AMOUNT,
+            BORROWER_BTC_ADDRESS,
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        
+        vm.stopPrank();
+    }
+
+    function testRequestLoanBelowMinimum() public {
+        vm.startPrank(borrower);
+        
+        vm.expectRevert("Loan: amount must be greater than minimum loan amount");
+        loan.requestLoan{value: PROCESSING_FEE}(
+            MIN_LOAN_AMOUNT - 0.001 ether,
+            BORROWER_BTC_ADDRESS,
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        
+        vm.stopPrank();
+    }
+
+    function testRequestLoanInvalidBtcAddress() public {
+        vm.startPrank(borrower);
+        
+        vm.expectRevert("Loan: invalid BTC P2TR address");
+        loan.requestLoan{value: PROCESSING_FEE}(
+            LOAN_AMOUNT,
+            "invalid_address",
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        
+        vm.stopPrank();
+    }
+
+    function testRequestLoanInvalidBtcPubkey() public {
+        vm.startPrank(borrower);
+        
+        vm.expectRevert("Loan: invalid BTC Schnorr (x only) pubkey");
+        loan.requestLoan{value: PROCESSING_FEE}(
+            LOAN_AMOUNT,
+            BORROWER_BTC_ADDRESS,
+            "0x1234", // Too short
+            preimageHashBorrower
+        );
+        
+        vm.stopPrank();
+    }
+
+    function testRequestLoanBorrowerAlreadyHasLoan() public {
+        // Request first loan
+        requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Try to request second loan
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: borrower already has active loan");
+        loan.requestLoan{value: PROCESSING_FEE}(
+            LOAN_AMOUNT,
+            BORROWER_BTC_ADDRESS,
+            BORROWER_BTC_PUBKEY,
+            preimageHashBorrower
+        );
+        vm.stopPrank();
+    }
+
+    // ============ LOAN OFFER TESTS ============
+
+    function testExtendLoanOffer() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        vm.startPrank(lender);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LoanOffered(loanId, lender, LOAN_AMOUNT, (LOAN_AMOUNT * 10) / 100);
+        
+        loan.extendLoanOffer(
+            loanId,
+            preimageHashBorrower,
+            preimageHashLender
+        );
+        
+        vm.stopPrank();
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Offered);
+        assertEq(loanData.bondAmount, (LOAN_AMOUNT * 10) / 100);
+    }
+
+    function testExtendLoanOfferOnlyLender() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: caller is not the lender");
+        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+            loanId,
+            preimageHashBorrower,
+            preimageHashLender
+        );
+        vm.stopPrank();
+    }
+
+    function testExtendLoanOfferWrongStatus() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        
+        vm.startPrank(lender);
+        vm.expectRevert("Loan: incorrect loan status");
+        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+            loanId,
+            preimageHashBorrower,
+            preimageHashLender
+        );
+        vm.stopPrank();
+    }
+
+    // ============ LOAN ACCEPTANCE TESTS ============
+
+    function testAcceptLoanOffer() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        
+        vm.startPrank(borrower);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LoanActivated(loanId, borrower);
+        
+        loan.acceptLoanOffer(loanId, preimageBorrower);
+        
+        vm.stopPrank();
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Active);
+        
+        // Check that processing fee was reimbursed
+        assertEq(borrower.balance, PROCESSING_FEE);
+    }
+
+    function testAcceptLoanOfferWrongBorrower() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        
+        vm.startPrank(borrower2);
+        vm.expectRevert("Loan: caller is not the borrower");
+        loan.acceptLoanOffer(loanId, preimageBorrower);
+        vm.stopPrank();
+    }
+
+    // ============ REPAYMENT TESTS ============
+
+    function testAttemptRepayment() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        
+        vm.startPrank(borrower);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit RepaymentAttempted(loanId, borrower, LOAN_AMOUNT);
+        
+        loan.attemptRepayment{value: LOAN_AMOUNT}(loanId, preimageHashLender);
+        
+        vm.stopPrank();
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.RepaymentInProgress);
+    }
+
+    function testAttemptRepaymentWrongAmount() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: incorrect repayment amount");
+        loan.attemptRepayment{value: LOAN_AMOUNT - 0.1 ether}(loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    function testAcceptRepayment() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        attemptRepayment(loanId);
+        
+        vm.startPrank(lender);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit RepaymentAccepted(loanId, lender);
+        
+        loan.acceptLoanRepayment(loanId, preimageLender);
+        
+        vm.stopPrank();
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Repaid);
+    }
+
+    // ============ DELETION TESTS ============
+
+    function testDeleteCompletedLoan() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        attemptRepayment(loanId);
+        
+        vm.startPrank(lender);
+        loan.acceptLoanRepayment(loanId, preimageLender);
+        vm.stopPrank();
+        
+        // Delete the loan
+        vm.startPrank(borrower);
+        
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LoanDeleted(loanId, borrower);
+        
+        loan.deleteCompletedLoan(loanId);
+        
+        vm.stopPrank();
+        
+        // Verify loan is deleted
+        vm.expectRevert("Loan: loan does not exist");
+        loan.getLoan(loanId);
+        
+        // Verify borrower can request new loan
+        requestLoan(borrower, LOAN_AMOUNT);
+    }
+
+    function testDeleteActiveLoanFails() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: cannot delete active loan");
+        loan.deleteCompletedLoan(loanId);
+        vm.stopPrank();
+    }
+
+    // ============ INTEGRATION TESTS ============
+
+    function testCompleteLoanFlow() public {
+        // 1. Request loan
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        assertEq(loan.getTotalLoans(), 1);
+        
+        // 2. Offer loan
+        offerLoan(loanId);
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Offered);
+        
+        // 3. Accept loan
+        acceptLoan(loanId);
+        loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Active);
+        
+        // 4. Attempt repayment
+        attemptRepayment(loanId);
+        loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.RepaymentInProgress);
+        
+        // 5. Accept repayment
+        vm.startPrank(lender);
+        loan.acceptLoanRepayment(loanId, preimageLender);
+        vm.stopPrank();
+        
+        loanData = loan.getLoan(loanId);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Repaid);
+        
+        // 6. Delete loan
+        vm.startPrank(borrower);
+        loan.deleteCompletedLoan(loanId);
+        vm.stopPrank();
+        
+        // Verify loan is deleted and borrower can request new loan
+        assertEq(loan.getLoanIdByBorrower(borrower), 0);
+        requestLoan(borrower, LOAN_AMOUNT);
+    }
+
+    // ============ VIEW FUNCTION TESTS ============
+
+    function testGetLoan() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertEq(loanData.borrowerAddr, borrower);
+        assertEq(loanData.amount, LOAN_AMOUNT);
+        assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Requested);
+    }
+
+    function testGetLoanNonexistent() public {
+        vm.expectRevert("Loan: loan does not exist");
+        loan.getLoan(999);
+    }
+
+    function testGetTotalLoans() public {
+        assertEq(loan.getTotalLoans(), 0);
+        
+        requestLoan(borrower, LOAN_AMOUNT);
+        assertEq(loan.getTotalLoans(), 1);
+        
+        requestLoan(borrower2, LOAN_AMOUNT);
+        assertEq(loan.getTotalLoans(), 2);
+    }
+
+    function testGetLoanIdByBorrower() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        assertEq(loan.getLoanIdByBorrower(borrower), loanId);
+        assertEq(loan.getLoanIdByBorrower(borrower2), 0);
+    }
+
+    // ============ EMERGENCY TESTS ============
+
+    function testEmergencyWithdraw() public {
+        // Send some ETH to contract
+        payable(address(loan)).transfer(1 ether);
+        
+        uint256 initialBalance = lender.balance;
+        
+        vm.startPrank(lender);
+        loan.emergencyWithdraw();
+        vm.stopPrank();
+        
+        assertEq(lender.balance, initialBalance + 1 ether);
+        assertEq(address(loan).balance, 0);
+    }
+
+    function testEmergencyWithdrawOnlyLender() public {
+        payable(address(loan)).transfer(1 ether);
+        
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: caller is not the lender");
+        loan.emergencyWithdraw();
+        vm.stopPrank();
+    }
+
+    function testEmergencyWithdrawNoBalance() public {
+        vm.startPrank(lender);
+        vm.expectRevert("Loan: no ETH to withdraw");
+        loan.emergencyWithdraw();
+        vm.stopPrank();
+    }
+
+    // ============ RECEIVE FUNCTION TESTS ============
+
+    function testReceive() public {
+        payable(address(loan)).transfer(1 ether);
+        assertEq(address(loan).balance, 1 ether);
+    }
+} 

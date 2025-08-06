@@ -29,10 +29,10 @@ contract WETHTest is Test {
 
     function testReceiveMintsWETH() public {
         uint256 depositAmount = 2 ether;
-        (bool sent, ) = address(weth).call{value: depositAmount}("");
+        (bool sent,) = address(weth).call{value: depositAmount}("");
         require(sent, "ETH send failed");
         assertEq(weth.balanceOf(address(this)), depositAmount);
     }
 
     receive() external payable {}
-} 
+}
