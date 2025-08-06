@@ -8,6 +8,7 @@
 pragma solidity ^0.8.30;
 
 import "./TransferHelper.sol";
+import {console} from "../lib/forge-std/src/console.sol";
 
 // @title Hash timelock contract for Ether
 contract EtherSwap {
@@ -304,6 +305,13 @@ contract EtherSwap {
         bytes32 preimageHash = sha256(abi.encodePacked(preimage));
         bytes32 hash = hashValues(preimageHash, amount, claimAddress, refundAddress, timelock);
 
+        //@todo: remove, only for debugging
+        
+        // console.log("claiming_hash. refundAddress");
+        // console.logAddress(refundAddress);
+        // console.log("claiming_hash. hash");
+        // console.logBytes32(hash);
+
         // Make sure that the swap to be claimed has Ether locked
         checkSwapIsLocked(hash);
 
@@ -327,6 +335,12 @@ contract EtherSwap {
 
         // Hash the values of the swap
         bytes32 hash = hashValues(preimageHash, amount, claimAddress, msg.sender, timelock);
+
+        //@todo: remove, only for debugging
+        // console.log("locking_hash. msg.sender");
+        // console.logAddress(msg.sender);
+        // console.log("locking_hash. hash");
+        // console.logBytes32(hash);
 
         // Make sure no swap with this value hash exists yet
         require(!swaps[hash], "EtherSwap: swap exists already");

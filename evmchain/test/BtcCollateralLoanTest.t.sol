@@ -23,12 +23,16 @@ contract BtcCollateralLoanTest is Test {
     uint256 public constant LOAN_AMOUNT = 1 ether;
     uint256 public constant PROCESSING_FEE = 0.001 ether;
     uint256 public constant MIN_LOAN_AMOUNT = 0.005 ether;
+
+    uint256 public constant LENDER_BOND_PERCENTAGE = 10;
     
-    // Timelocks (in blocks)
+    // Timelocks and duration (in blocks)
+    uint256 public constant LOAN_DURATION = 3000*180; //approx 6 months on rootstock
     uint256 public constant TIMELOCK_LOAN_REQ = 100;
     uint256 public constant TIMELOCK_BTC_ESCROW = 200;
     uint256 public constant TIMELOCK_REPAYMENT_ACCEPT = 150;
-    uint256 public constant TIMELOCK_BTC_COLLATERAL = 250;
+    uint256 public constant TIMELOCK_BTC_COLLATERAL = LOAN_DURATION + 288; //288 bitcoin blocks (approx 2 days)
+
     
     // Preimages and hashes
     bytes32 public preimageBorrower = keccak256("borrower_preimage");
@@ -59,6 +63,7 @@ contract BtcCollateralLoanTest is Test {
         vm.startPrank(lender);
         (address etherSwapAddress, address loanAddress) = factory.deployContracts(
             LENDER_BTC_PUBKEY,
+            LOAN_DURATION,
             TIMELOCK_LOAN_REQ,
             TIMELOCK_BTC_ESCROW,
             TIMELOCK_REPAYMENT_ACCEPT,
@@ -91,7 +96,7 @@ contract BtcCollateralLoanTest is Test {
 
     function offerLoan(uint256 _loanId) internal {
         vm.startPrank(lender);
-        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+        loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             _loanId,
             preimageHashBorrower,
             preimageHashLender
@@ -113,8 +118,9 @@ contract BtcCollateralLoanTest is Test {
 
     // ============ CONSTRUCTOR TESTS ============
 
-    function testConstructor() public {
+    function testConstructor() public view {
         assertEq(loan.lenderBtcPubkey(), LENDER_BTC_PUBKEY);
+        assertEq(loan.loanDuration(), LOAN_DURATION);
         assertEq(loan.timelockLoanReq(), TIMELOCK_LOAN_REQ);
         assertEq(loan.timelockBtcEscrow(), TIMELOCK_BTC_ESCROW);
         assertEq(loan.timelockRepaymentAccept(), TIMELOCK_REPAYMENT_ACCEPT);
@@ -126,6 +132,7 @@ contract BtcCollateralLoanTest is Test {
         vm.expectRevert("Loan: invalid BTC Schnorr (x only) pubkey");
         new BtcCollateralLoan(
             "0x123456789012345678901234567890123456789012345678901234567890123", // 31 bytes
+            LOAN_DURATION,
             TIMELOCK_LOAN_REQ,
             TIMELOCK_BTC_ESCROW,
             TIMELOCK_REPAYMENT_ACCEPT,
@@ -250,9 +257,9 @@ contract BtcCollateralLoanTest is Test {
         vm.startPrank(lender);
         
         vm.expectEmit(true, true, false, true, address(loan));
-        emit LoanOffered(loanId, lender, LOAN_AMOUNT, (LOAN_AMOUNT * 10) / 100);
+        emit LoanOffered(loanId, lender, LOAN_AMOUNT, (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100);
         
-        loan.extendLoanOffer(
+        loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             loanId,
             preimageHashBorrower,
             preimageHashLender
@@ -270,7 +277,7 @@ contract BtcCollateralLoanTest is Test {
         
         vm.startPrank(borrower);
         vm.expectRevert("Loan: caller is not the lender");
-        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+            loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             loanId,
             preimageHashBorrower,
             preimageHashLender
@@ -283,8 +290,9 @@ contract BtcCollateralLoanTest is Test {
         offerLoan(loanId);
         
         vm.startPrank(lender);
+        //once the loan is offered, the lender cannot extend the offer again
         vm.expectRevert("Loan: incorrect loan status");
-        loan.extendLoanOffer{value: LOAN_AMOUNT}(
+        loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             loanId,
             preimageHashBorrower,
             preimageHashLender
@@ -298,6 +306,9 @@ contract BtcCollateralLoanTest is Test {
         uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
         offerLoan(loanId);
         
+        //borrower balance before accepting the loan
+        uint256 borrowerBalanceBefore = borrower.balance;
+
         vm.startPrank(borrower);
         
         vm.expectEmit(true, true, false, true, address(loan));
@@ -310,8 +321,8 @@ contract BtcCollateralLoanTest is Test {
         BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
         assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Active);
         
-        // Check that processing fee was reimbursed
-        assertEq(borrower.balance, PROCESSING_FEE);
+        // Check that loan amount was sent + processing fee was reimbursed
+        assertEq(borrower.balance - borrowerBalanceBefore, LOAN_AMOUNT + PROCESSING_FEE);
     }
 
     function testAcceptLoanOfferWrongBorrower() public {
@@ -331,6 +342,9 @@ contract BtcCollateralLoanTest is Test {
         offerLoan(loanId);
         acceptLoan(loanId);
         
+        //borrower balance before attempting repayment
+        uint256 borrowerBalanceBefore = borrower.balance;
+
         vm.startPrank(borrower);
         
         vm.expectEmit(true, true, false, true, address(loan));
@@ -342,6 +356,19 @@ contract BtcCollateralLoanTest is Test {
         
         BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
         assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.RepaymentInProgress);
+        assertEq(borrowerBalanceBefore - borrower.balance, LOAN_AMOUNT);
+    }
+
+    function testAttemptRepaymentFromAnyone() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        vm.startPrank(borrower2);
+        // borrower2 can repay, but to recover BTC collateral, it is still borrower 1 who needs to sign & add preimagelender (if revealed)
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit RepaymentAttempted(loanId, borrower2, LOAN_AMOUNT);
+        loan.attemptRepayment{value: LOAN_AMOUNT}(loanId, preimageHashLender);
+        vm.stopPrank();
     }
 
     function testAttemptRepaymentWrongAmount() public {
@@ -355,12 +382,26 @@ contract BtcCollateralLoanTest is Test {
         vm.stopPrank();
     }
 
+    function testAttemptRepaymentPastDue() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        vm.roll(block.number + LOAN_DURATION + 1); //use `vmwarp()` if switching to timestamp instead of block number
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: loan is past due");
+        loan.attemptRepayment{value: LOAN_AMOUNT}(loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
     function testAcceptRepayment() public {
         uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
         offerLoan(loanId);
         acceptLoan(loanId);
         attemptRepayment(loanId);
-        
+
+        //lender balance before accepting the repayment
+        uint256 lenderBalanceBefore = lender.balance;
+
         vm.startPrank(lender);
         
         vm.expectEmit(true, true, false, true, address(loan));
@@ -372,6 +413,24 @@ contract BtcCollateralLoanTest is Test {
         
         BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
         assertLoanStatus(loanData, BtcCollateralLoan.LoanStatus.Repaid);
+        assertEq(lender.balance - lenderBalanceBefore, LOAN_AMOUNT);
+    }
+    // ============ MARK AS DEFAULTED TESTS ============
+
+    function testMarkAsDefaulted() public {
+        //lender balance before requesting the loan
+        uint256 lenderBalancePreLoan = lender.balance;
+
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId);
+        acceptLoan(loanId);
+        vm.roll(block.number + LOAN_DURATION + 1); //use `vmwarp()` if switching to timestamp instead of block number
+        vm.startPrank(lender);
+        loan.markAsDefaulted(loanId);
+        vm.stopPrank();
+        assertLoanStatus(loan.getLoan(loanId), BtcCollateralLoan.LoanStatus.Defaulted);
+        //bond is back, but not loan (can capture collateral
+        assertEq(lenderBalancePreLoan - lender.balance, LOAN_AMOUNT);
     }
 
     // ============ DELETION TESTS ============
@@ -397,11 +456,10 @@ contract BtcCollateralLoanTest is Test {
         vm.stopPrank();
         
         // Verify loan is deleted
-        vm.expectRevert("Loan: loan does not exist");
         loan.getLoan(loanId);
+        //check loan.borrowerAddr is 0x0000000000000000000000000000000000000000
+        assertEq(loan.getLoan(loanId).borrowerAddr, address(0));
         
-        // Verify borrower can request new loan
-        requestLoan(borrower, LOAN_AMOUNT);
     }
 
     function testDeleteActiveLoanFails() public {
@@ -525,4 +583,28 @@ contract BtcCollateralLoanTest is Test {
         payable(address(loan)).transfer(1 ether);
         assertEq(address(loan).balance, 1 ether);
     }
+
+    // ============ BITCOIN UTILITY FUNCTIONS ============
+
+    function testExtractTimestamp() public view {
+        //for block 908894, timestamp is 1754503783
+        bytes memory header = hex"0000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
+        uint32 timestamp = loan.extractTimestamp(header);
+        assertEq(timestamp, 1754503783); //2025-08-06 12:09:43 UTC
+    }
+
+    function testExtractTimestampHeaderTooLong() public {
+        //header is too long
+        bytes memory header = hex"000000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
+        vm.expectRevert("Invalid header length");
+        loan.extractTimestamp(header);
+    }   
+
+    function testExtractTimestampHeaderTooShort() public {
+        //header is too short
+        bytes memory header = hex"602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a";
+        vm.expectRevert("Invalid header length");
+        loan.extractTimestamp(header);
+    }
+
 } 

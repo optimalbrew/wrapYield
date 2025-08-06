@@ -30,6 +30,7 @@ contract LoanFactory {
      */
     function deployContracts(
         string memory lenderBtcPubkey,
+        uint256 loanDuration,
         uint256 timelockLoanReq,
         uint256 timelockBtcEscrow,
         uint256 timelockRepaymentAccept,
@@ -43,6 +44,7 @@ contract LoanFactory {
         // Step 1: Deploy BtcCollateralLoan first (without EtherSwap address)
         BtcCollateralLoan loanContract = new BtcCollateralLoan(
             lenderBtcPubkey,
+            loanDuration,
             timelockLoanReq,
             timelockBtcEscrow,
             timelockRepaymentAccept,

@@ -39,24 +39,31 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     uint256 public constant MIN_LOAN_AMOUNT = 0.005 ether;
     /// rBTC (about $500) Minimum loan amount
 
+    /// 1% Origin fee for activated loan, used on bitcoin side
     uint256 public constant ORIGIN_FEE_PERCENTAGE_DIVISOR = 1000;
 
-    /// 1% Origin fee for activated loan, used on bitcoin side
-
+    /// 10% lender bond percentage
     uint256 public constant LENDER_BOND_PERCENTAGE = 10;
 
     /// Lender bond percentage (10% of loan amount)
 
     //todo: Ensure that changes to these parameters do not affect active loans
     uint256 public timelockLoanReq; // t_B (shorter than t_O) // enforced on the evm side
-    uint256 public timelockBtcEscrow; // t_0 // enforced on the bitcoin side
+    
+    //this needs to be conservatively large, so that once expressed in bitcoin blocks (e.g. 1:20 ratio), it is 
+    // still large enoughto ensure it does not lead to situations where the borrower has custody of both
+    // the BTC collateral and the EVM chain loan at the same time.
+    uint256 public timelockBtcEscrow; // t_0 // enforced on the bitcoin side, should not be used here
+    
     uint256 public timelockRepaymentAccept; // t_L // enforced on the evm side
-    uint256 public timelockBtcCollateral; // t_1 (longer than t_L) // enforced on the bitcoin side
+    
+    //this can safely be very large. Also needs to be converted to bitcoin blocks using a ratio e.g. 1:20
+    uint256 public timelockBtcCollateral; // t_1 (longer than t_L) // enforced on the bitcoin side, not used here
 
-    //todo: use these later. Currently no interest and duration controlled by timelocks
-    /// @dev currently unused
-    uint256 public loanDuration;
-    /// @dev currently unused
+    /// @dev Duration starts once loan is activated. e.g. 3000*180 blocks (6 months on rootstock)
+    uint256 public loanDuration; //t_D, needs to be earlier than t_1 (which is when BTC collateral is released to lender)
+  
+    /// @dev currently unused.
     uint256 public loanInterestRate;
 
     /// @dev Loan counter
@@ -82,15 +89,15 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         address borrowerAddr; //borrower EVM address
         string borrowerBtcPubkey; //borrower's bitcoin Schnorr (x only) public key, 32 bytes
         uint256 amount; //loan amount
-        uint256 collateralAmount; //collateral amount
+        uint256 collateralAmount; //collateral amount @todo: may not be needed
         uint256 bondAmount; //lender's bond amount
         LoanStatus status; //loan status
         bytes32 preimageHashBorrower; //borrower's preimage hash
         bytes32 preimageHashLender; //lender's preimage hash
-        uint256 requestTimestamp;
-        uint256 offerTimestamp;
-        uint256 activationTimestamp;
-        uint256 repaymentTimestamp;
+        uint256 requestBlockheight;
+        uint256 offerBlockheight;
+        uint256 activationBlockheight;
+        uint256 repaymentBlockheight;
     }
 
     // ============ MAPPINGS ============
@@ -118,6 +125,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     event RepaymentAccepted(uint256 indexed loanId, address indexed lender);
     event RepaymentRefundedToBorrowerWithBond(uint256 indexed loanId, address indexed borrower, uint256 bondAmount);
     event ParametersUpdated(
+        uint256 loanDuration,
         uint256 timelockLoanReq,
         uint256 timelockBtcEscrow,
         uint256 timelockRepaymentAccept,
@@ -135,6 +143,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     }
 
     modifier loanExists(uint256 loanId) {
+        //Note: this just checks for valid index as fast fail. If a loan has been deleted, it will not be in the mapping
+        // but solidity will not revert and will return a default value for the struct.
         require(loanId > 0 && loanId <= _loanIds, "Loan: loan does not exist");
         _;
     }
@@ -148,6 +158,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
     constructor(
         string memory _lenderBtcPubkey, // Schnorr (x only) public key, 32 bytes
+        uint256 _loanDuration,
         uint256 _timelockLoanReq,
         uint256 _timelockBtcEscrow,
         uint256 _timelockRepaymentAccept,
@@ -156,6 +167,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(bytes(_lenderBtcPubkey).length == 32, "Loan: invalid BTC Schnorr (x only) pubkey");
 
         lenderBtcPubkey = _lenderBtcPubkey;
+        loanDuration = _loanDuration;
         timelockLoanReq = _timelockLoanReq;
         timelockBtcEscrow = _timelockBtcEscrow;
         timelockRepaymentAccept = _timelockRepaymentAccept;
@@ -193,6 +205,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
      * how will this impact active loans?
      */
     function updateParameters(
+        uint256 _loanDuration,
         uint256 _timelockLoanReq,
         uint256 _timelockBtcEscrow,
         uint256 _timelockRepaymentAccept,
@@ -201,12 +214,13 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(_timelockBtcEscrow > _timelockLoanReq, "Loan: t_0 must be > t_B");
         require(_timelockBtcCollateral > _timelockRepaymentAccept, "Loan: t_1 must be > t_L");
 
+        loanDuration = _loanDuration;
         timelockLoanReq = _timelockLoanReq;
         timelockBtcEscrow = _timelockBtcEscrow;
         timelockRepaymentAccept = _timelockRepaymentAccept;
         timelockBtcCollateral = _timelockBtcCollateral;
 
-        emit ParametersUpdated(_timelockLoanReq, _timelockBtcEscrow, _timelockRepaymentAccept, _timelockBtcCollateral);
+        emit ParametersUpdated(_loanDuration, _timelockLoanReq, _timelockBtcEscrow, _timelockRepaymentAccept, _timelockBtcCollateral);
     }
 
     /**
@@ -224,19 +238,23 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         nonReentrant
     {
         Loan storage loan = loans[loanId];
-        require(msg.value == loan.amount, "Loan: incorrect loan amount");
+    
         uint256 bondAmount = (loan.amount * LENDER_BOND_PERCENTAGE) / 100;
+        require(msg.value == loan.amount + bondAmount, "Loan: incorrect value sent");
 
         // Lock the loan amount in EtherSwap
-        uint256 timelock = block.number + timelockBtcEscrow;
+        uint256 timelock = block.number + timelockLoanReq;
         etherSwap.lock{value: loan.amount}(preimageHashBorrower, address(this), timelock);
+
+        //lock the lender's bond amount in loan contract
+        payable(address(this)).transfer(bondAmount);
 
         // Update loan state
         loan.status = LoanStatus.Offered;
         loan.preimageHashBorrower = preimageHashBorrower;
         loan.preimageHashLender = preimageHashLender;
         loan.bondAmount = bondAmount;
-        loan.offerTimestamp = block.timestamp;
+        loan.offerBlockheight = block.number;
 
         emit LoanOffered(loanId, msg.sender, loan.amount, bondAmount);
     }
@@ -255,7 +273,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         Loan storage loan = loans[loanId];
 
         // Refund from EtherSwap
-        uint256 timelock = block.number + timelockBtcEscrow;
+        uint256 timelock = block.number + timelockLoanReq;
         etherSwap.refund(loan.preimageHashBorrower, loan.amount, address(this), timelock);
 
         // Update loan state
@@ -280,11 +298,14 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Claim repayment from EtherSwap
         uint256 timelock = block.number + timelockRepaymentAccept;
-        etherSwap.claim(preimageLender, loan.amount, address(this), timelock);
+        etherSwap.claim(preimageLender, loan.amount, address(this), address(this), timelock);
+
+        //if above is successful, then the claimed ether is sent to the lender
+        payable(msg.sender).transfer(loan.amount); 
 
         // Update loan state
         loan.status = LoanStatus.Repaid;
-        loan.repaymentTimestamp = block.timestamp;
+        loan.repaymentBlockheight = block.number;
 
         emit RepaymentAccepted(loanId, msg.sender);
     }
@@ -302,8 +323,9 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     {
         Loan storage loan = loans[loanId];
         require(
-            block.timestamp > loan.activationTimestamp + timelockRepaymentAccept,
-            "Loan: loan not repaid within timelock"
+            //this should use block number
+            block.number > loan.activationBlockheight + loanDuration,
+            "Loan: loan cannot be marked as defaulted yet"
         );
         loan.status = LoanStatus.Defaulted;
 
@@ -346,10 +368,10 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
             status: LoanStatus.Requested,
             preimageHashBorrower: preimageHashBorrower,
             preimageHashLender: bytes32(0),
-            requestTimestamp: block.timestamp,
-            offerTimestamp: 0,
-            activationTimestamp: 0,
-            repaymentTimestamp: 0
+            requestBlockheight: block.number,
+            offerBlockheight: 0,
+            activationBlockheight: 0,
+            repaymentBlockheight: 0
         });
 
         borrowerToLoanId[msg.sender] = loanId;
@@ -372,20 +394,22 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
 
         // Claim loan from EtherSwap
-        uint256 timelock = block.number + timelockBtcEscrow;
+        uint256 timelock = block.number + timelockLoanReq;
         etherSwap.claim(
             preimageBorrower, //this allows lender to commit btc to collateral address (using pre-signed btc tx)
             loan.amount,
-            msg.sender,
+            address(this), //claim address
+            address(this), //refund address both are the same here
             timelock
         );
 
+        //if above is successful, then the claimed ether is sent to the borrower
+        //and reimburse the processing fee
+        payable(msg.sender).transfer(loan.amount + PROCESSING_FEE); 
+
         // Update loan state
         loan.status = LoanStatus.Active;
-        loan.activationTimestamp = block.timestamp;
-
-        //reimburse the processing fee
-        payable(msg.sender).transfer(PROCESSING_FEE);
+        loan.activationBlockheight = block.number;       
 
         emit LoanActivated(loanId, msg.sender);
     }
@@ -403,7 +427,9 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         nonReentrant
     {
         Loan storage loan = loans[loanId];
-        require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
+        // anyone can repay a loan
+        //require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
+        require(block.number < loan.activationBlockheight + loanDuration, "Loan: loan is past due");
         require(msg.value == loan.amount, "Loan: incorrect repayment amount");
 
         // Lock repayment in EtherSwap
@@ -427,6 +453,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         nonReentrant
     {
         Loan storage loan = loans[loanId];
+        // this we restrict to borrower for now.
         require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
         require(loan.preimageHashLender == bytes32(0), "Loan: repayment already accepted by lender");
 
@@ -443,6 +470,28 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         emit RepaymentRefundedToBorrowerWithBond(loanId, msg.sender, loan.bondAmount);
     }
 
+    // bitcoin utility functions
+
+    /**
+     * @dev Extract timestamp from Bitcoin header
+     * @param header The Bitcoin header bytes
+     * @return Timestamp in seconds
+     * may be useful later is switching from block number to timestamp
+     */
+    function extractTimestamp(bytes memory header) public pure returns (uint32) {
+        require(header.length == 80, "Invalid header length");
+
+        // Extract timestamp from bytes 68-71 (little-endian)
+        uint32 ts =
+            uint32(uint8(header[68])) |
+            (uint32(uint8(header[69])) << 8) |
+            (uint32(uint8(header[70])) << 16) |
+            (uint32(uint8(header[71])) << 24);
+
+        return ts;
+    }
+
+    
     // ============ VIEW FUNCTIONS ============
 
     /**
@@ -456,7 +505,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Get total number of loans
+     * @dev Get total number of loans ever requested. This is not the number of active loans.
      * @return Total loan count
      */
     function getTotalLoans() external view returns (uint256) {
@@ -475,7 +524,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     // ============ DELETION FUNCTIONS ============
 
     /**
-     * @dev Delete a completed loan to free up storage
+     * @dev Delete a completed, defaulted, or abandoned loan request to free up storage
      * @param loanId The loan ID to delete
      */
     function deleteCompletedLoan(uint256 loanId) external loanExists(loanId) {

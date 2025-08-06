@@ -31,6 +31,7 @@ contract DeployScript is Script {
         // Deploy BtcCollateralLoan contract using factory
         (address etherSwapAddress, address loanAddress) = loanFactory.deployContracts(
             "0x1234567890123456789012345678901234567890123456789012345678901234", // lenderBtcPubkey (32 bytes)
+            3000*180, // loanDuration
             100, // timelockLoanReq
             200, // timelockBtcEscrow  
             150, // timelockRepaymentAccept
