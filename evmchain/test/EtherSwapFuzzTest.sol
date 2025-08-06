@@ -6,13 +6,13 @@
 pragma solidity ^0.8.30;
 
 import "../lib/forge-std/src/Test.sol";
-import "./SigUtils.sol";
-import "../src/EtherSwap.sol";
+import "../test/SigUtils.sol";
+import "../src/EtherSwapOrig.sol"; //this has been modified, so the 
 
-contract EtherSwapFuzzTest is Test {
+contract EtherSwapFuzzOrigTest is Test {
     event Claim(bytes32 indexed preimageHash, bytes32 preimage);
 
-    EtherSwap internal swap = new EtherSwap();
+    EtherSwapOrig internal swap = new EtherSwapOrig(); 
 
     receive() external payable {}
 

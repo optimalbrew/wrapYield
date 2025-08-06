@@ -6,10 +6,10 @@
 pragma solidity ^0.8.30;
 
 import "../lib/forge-std/src/Test.sol";
-import "./SigUtils.sol";
-import "../src/EtherSwap.sol";
+import "../test/SigUtils.sol";
+import "../src/EtherSwapOrig.sol"; //this has been modified, so the tests won't work without furter mods
 
-contract EtherSwapTest is Test {
+contract EtherSwapOrigTest is Test {
     event Lockup(
         bytes32 indexed preimageHash,
         uint256 amount,
@@ -21,7 +21,7 @@ contract EtherSwapTest is Test {
     event Claim(bytes32 indexed preimageHash, bytes32 preimage);
     event Refund(bytes32 indexed preimageHash);
 
-    EtherSwap internal swap = new EtherSwap();
+    EtherSwapOrig internal swap = new EtherSwapOrig();
 
     bytes32 internal preimage = sha256("");
     bytes32 internal preimageHash = sha256(abi.encodePacked(preimage));
