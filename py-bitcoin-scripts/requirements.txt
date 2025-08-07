@@ -1,0 +1,17 @@
+# Bitcoin Examples Requirements
+# This file lists the Python dependencies needed for the Bitcoin examples
+
+=====IMPORTANT=======
+
+# Core Bitcoin utilities library
+bitcoinutils #pip3 install bitcoin-utils
+
+NOTE: pip will install the latest release (at time of writing), which is from a year ago. Instead of that, use the latest version of the library from github. That's what I have done here manually, by cloning the repo, overwriting the version installed by pip.
+
+===================
+
+# Note: This project requires a Bitcoin Core node running in regtest mode
+# there is a docker compose for this in docker directory
+# and the rpc username: bitcoin, and passwd: localtest
+# The examples are designed to work with Bitcoin Core v22.0 or later
+# that supports Taproot (BIPs 340, 341, 342) 

@@ -19,7 +19,7 @@ services:
       -fallbackfee=0.0002
       -printtoconsole
     volumes:
-      - ./data/bitcoind:/bitcoin/.bitcoin
+      - ./data/bitcoind:/home/bitcoin/.bitcoin
     #networks: 
     #  - bitcoin-regtest
 
