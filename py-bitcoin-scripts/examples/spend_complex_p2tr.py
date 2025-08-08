@@ -1,30 +1,34 @@
 """
 Modified for testing with a bitcoin node in regtest mode
 
-====
-Original Example: Spend from a 4-leaf Taproot address via Script Path (Hashlock, Multisig, CSV, or Siglock)
+Start with spend_p2tr_four_scripts_by_script_path.py (original example from @aaron_recompile)
+* then add NUMS key as internal key ✅
+* then add a script path that is a hashlock and a siglock ✅    
+* then add a script path that is both a hashlock and a multisig ✅
 
-Merkle Tree Layout:
-#         Merkle Root
-#         /        \
-#    Branch0      Branch1  
-#   /      \      /      \
-# S0       S1     S2      S3
-Hashlock Multi  CSV     Siglock
-
-This script allows spending from any of the four script paths using the correct ControlBlock and Witness stack.
-
-Author: Aaron Zhang (@aaron_recompile)
 """
 
 from bitcoinutils.setup import setup
 from bitcoinutils.proxy import NodeProxy
-from bitcoinutils.keys import PrivateKey
+from bitcoinutils.keys import PrivateKey, PublicKey
 from bitcoinutils.script import Script
 from bitcoinutils.transactions import Transaction, TxInput, TxOutput, TxWitnessInput, Sequence
 from bitcoinutils.utils import to_satoshis, ControlBlock
 from bitcoinutils.constants import TYPE_RELATIVE_TIMELOCK
 import hashlib
+
+
+def get_nums_key():
+    """
+    Returns the NUMS (Nothing-Up-My-Sleeve) key.
+    This is a well-known public key that has no known private key.
+    Using this as the internal key ensures the P2TR can only be spent via script path.
+    
+    The NUMS key is: 0250929b74c1a04954b78b4b60c595c211f8b853e6e84bfa2be95712a7b0dd59e6
+    """
+    # This is the NUMS key from BIP-341
+    nums_hex = "0250929b74c1a04954b78b4b60c595c211f8b853e6e84bfa2be95712a7b0dd59e6"
+    return PublicKey.from_hex(nums_hex)
 
 def get_leaf_scripts(alice_pub, bob_pub):
     preimage = "helloworld"
@@ -42,7 +46,7 @@ def get_leaf_scripts(alice_pub, bob_pub):
         bob_pub.to_x_only_hex(),
         'OP_CHECKSIGADD',
         'OP_2',
-        'OP_EQUAL'
+        'OP_EQUAL' #chatgpt 5 The BIP342 pattern is: <pk1> OP_CHECKSIG <pk2> OP_CHECKSIGADD 2 OP_NUMEQUALVERIFY
     ])
 
     seq = Sequence(TYPE_RELATIVE_TIMELOCK, 2)
@@ -59,7 +63,39 @@ def get_leaf_scripts(alice_pub, bob_pub):
         'OP_CHECKSIG'
     ])
 
-    return [hashlock_script, multisig_script, csv_script, sig_script], preimage
+    #fail fast: checking hash is easier than verifying schnorr sig, so we can do that first
+    hashlock_and_siglock_script = Script([ 
+        'OP_SHA256',
+        hashlib.sha256(preimage.encode()).hexdigest(),
+        'OP_EQUALVERIFY',
+        bob_pub.to_x_only_hex(),
+        'OP_CHECKSIG'
+    ])
+
+    #try the other way around: this is not advised, because checking the hash is easier (fast fail)
+    # hashlock_and_siglock_script_2 = Script([
+    #     bob_pub.to_x_only_hex(),
+    #     'OP_CHECKSIGVERIFY', #using op_chekSig leaves a 1 on the stack, we don't want that
+    #     'OP_SHA256',
+    #     hashlib.sha256(preimage.encode()).hexdigest(),
+    #     'OP_EQUALVERIFY',
+    #     'OP_TRUE'
+    # ])
+
+    hashlock_and_multisig_script = Script([
+        'OP_SHA256',
+        hashlib.sha256(preimage.encode()).hexdigest(),
+        'OP_EQUALVERIFY',
+        alice_pub.to_x_only_hex(),
+        'OP_CHECKSIG',
+        bob_pub.to_x_only_hex(),
+        'OP_CHECKSIGADD',
+        'OP_2',
+        'OP_NUMEQUALVERIFY', #will leave nothing, so add op_true to make it work.
+        #'OP_EQUAL' #using op_equal instead of op_numequalverify does not need op_true
+        'OP_TRUE'
+    ])
+    return [hashlock_script, multisig_script, csv_script, sig_script, hashlock_and_siglock_script, hashlock_and_multisig_script], preimage
 
 
 def local_setup(proxy):
@@ -125,13 +161,15 @@ def main():
     bob_pub = bob_priv.get_public_key()
 
     scripts, preimage = get_leaf_scripts(alice_pub, bob_pub)
-    # hashlock, multisig, csv, siglock
-    tree = [[scripts[0], scripts[1]], [scripts[2], scripts[3]]]
+    # hashlock, multisig, csv, siglock, hashlock and siglock, hashlock and multisig
+    tree = [[[scripts[0], scripts[1]], [scripts[2], scripts[3]]], [scripts[4], scripts[5]]]
 
-    taproot_address = alice_pub.get_taproot_address(tree)
+    nums_key = get_nums_key()
+
+    taproot_address = nums_key.get_taproot_address(tree)
     print("Taproot address:", taproot_address.to_string())
 
-    leaf_index = 3
+    leaf_index = 5
     # Input the index of the script to spend
     tapleaf_script = scripts[leaf_index]
  
@@ -161,7 +199,7 @@ def main():
     # Handle different script paths based on leaf_index
     if leaf_index == 0:
         tapleaf_script = scripts[leaf_index]
-        ctrl_block = ControlBlock(alice_pub,tree,leaf_index, is_odd=taproot_address.is_odd())
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
 
         # Hashlock script path
         preimage_hex = preimage.encode('utf-8').hex()
@@ -172,7 +210,7 @@ def main():
         ])
     elif leaf_index == 1:
         tapleaf_script = scripts[leaf_index]
-        ctrl_block = ControlBlock(alice_pub,tree,leaf_index, is_odd=taproot_address.is_odd())
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
         # Multisig script path
         sigB = bob_priv.sign_taproot_input(
             tx, 0,
@@ -197,7 +235,7 @@ def main():
         ])
     elif leaf_index == 2:
         tapleaf_script = scripts[leaf_index]
-        ctrl_block = ControlBlock(alice_pub,tree,leaf_index, is_odd=taproot_address.is_odd())
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
         # CSV timelock script path - need to set sequence
         seq = Sequence(TYPE_RELATIVE_TIMELOCK, 2)
         seq_for_n_seq = seq.for_input_sequence()
@@ -220,7 +258,7 @@ def main():
     elif leaf_index == 3:
         print("Spending from Siglock script path")
         tapleaf_script = scripts[leaf_index]
-        ctrl_block = ControlBlock(alice_pub,tree,leaf_index, is_odd=taproot_address.is_odd())
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
         # Simple siglock script path
         sig = bob_priv.sign_taproot_input(
             tx, 0,
@@ -235,9 +273,57 @@ def main():
             tapleaf_script.to_hex(),
             ctrl_block.to_hex()
         ])
+    elif leaf_index == 4:
+        print("Spending from Hashlock and Siglock script path")
+        tapleaf_script = scripts[leaf_index]
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
+        # Hashlock and siglock script path
+        sig = bob_priv.sign_taproot_input(
+            tx, 0,
+            [taproot_address.to_script_pub_key()],
+            [to_satoshis(input_amount)],
+            script_path=True,
+            tapleaf_script=tapleaf_script,
+            tweak=False
+        )
+        preimage_hex = preimage.encode('utf-8').hex()
+        witness = TxWitnessInput([
+            sig,
+            preimage_hex,
+            tapleaf_script.to_hex(),
+            ctrl_block.to_hex()
+        ])
+    elif leaf_index == 5:
+        print("Spending from Hashlock and Multisig script path")
+        tapleaf_script = scripts[leaf_index]
+        ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
+        # Hashlock and siglock script path
+        sig_Bob = bob_priv.sign_taproot_input(
+            tx, 0,
+            [taproot_address.to_script_pub_key()],
+            [to_satoshis(input_amount)],
+            script_path=True,
+            tapleaf_script=tapleaf_script,
+            tweak=False
+        )
+        sig_Alice = alice_priv.sign_taproot_input(
+            tx, 0,
+            [taproot_address.to_script_pub_key()],
+            [to_satoshis(input_amount)],
+            script_path=True,
+            tapleaf_script=tapleaf_script,
+            tweak=False
+        )
+        preimage_hex = preimage.encode('utf-8').hex()
+        witness = TxWitnessInput([
+            sig_Bob,
+            sig_Alice,
+            preimage_hex,
+            tapleaf_script.to_hex(),
+            ctrl_block.to_hex()
+        ])
     else:
         raise Exception("Invalid leaf index")
-
     tx.witnesses.append(witness)
 
     #print("Final transaction (raw):")
