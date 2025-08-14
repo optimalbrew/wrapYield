@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vaultero"
+version = "0.1.0"
+description = "Package to build txs for btc2evm vaults"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{name = "optimalbrew", email = "petecarkeek@gmail.com"}]
+
+dependencies = [
+  # Replace <SHA> with a appropriate commit id from embit repo
+  "bitcoin-utils @ git+https://github.com/karask/python-bitcoin-utils.git@b689ba7e8ef831803695b591a76cbfbf88504bd8"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "build",
+  "twine"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git", ".venv", "venv", "env", "build", "dist", "*.egg-info", "__pycache__", "site-packages"]
+

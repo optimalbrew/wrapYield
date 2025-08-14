@@ -50,7 +50,7 @@ def get_leaf_scripts(alice_pub, bob_pub):
         'OP_EQUAL' #chatgpt 5 The BIP342 pattern is: <pk1> OP_CHECKSIG <pk2> OP_CHECKSIGADD 2 OP_NUMEQUALVERIFY
     ])
 
-    seq = Sequence(TYPE_RELATIVE_TIMELOCK, 2)
+    seq = Sequence(TYPE_RELATIVE_TIMELOCK, 144)
     csv_script = Script([
         seq.for_script(),
         'OP_CHECKSEQUENCEVERIFY',
@@ -170,7 +170,7 @@ def main():
     taproot_address = nums_key.get_taproot_address(tree)
     print("Taproot address:", taproot_address.to_string())
 
-    leaf_index = 5
+    leaf_index = 2
     # Input the index of the script to spend
     tapleaf_script = scripts[leaf_index]
  
@@ -238,7 +238,7 @@ def main():
         tapleaf_script = scripts[leaf_index]
         ctrl_block = ControlBlock(nums_key,tree,leaf_index, is_odd=taproot_address.is_odd())
         # CSV timelock script path - need to set sequence
-        seq = Sequence(TYPE_RELATIVE_TIMELOCK, 2)
+        seq = Sequence(TYPE_RELATIVE_TIMELOCK, 144)
         seq_for_n_seq = seq.for_input_sequence()
         assert seq_for_n_seq is not None
         txin.sequence = seq_for_n_seq
@@ -332,6 +332,8 @@ def main():
 
     try:
         # Try to broadcast the transaction
+        #for csv, we need to advance the chain by the timelock
+        proxy.generatetoaddress(144, addr)
         txid = proxy.sendrawtransaction(tx.serialize())
         print(f"✅ Transaction broadcast successfully! TXID: {txid}")         
     except Exception as e:

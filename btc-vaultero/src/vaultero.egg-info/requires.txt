@@ -1,0 +1,6 @@
+bitcoin-utils@ git+https://github.com/karask/python-bitcoin-utils.git@b689ba7e8ef831803695b591a76cbfbf88504bd8
+
+[dev]
+pytest>=8
+build
+twine
