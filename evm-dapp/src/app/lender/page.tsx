@@ -209,17 +209,7 @@ export default function LenderPage() {
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">Contract Status</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="font-medium text-green-800">LoanFactory</div>
-                <div className="text-green-600">
-                  {CONTRACTS.LOAN_FACTORY ? (
-                    <span className="text-green-700">✅ Deployed</span>
-                  ) : (
-                    <span className="text-red-600">❌ Not Deployed</span>
-                  )}
-                </div>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="font-medium text-blue-800">EtherSwap</div>
                 <div className="text-blue-600">
@@ -246,12 +236,6 @@ export default function LenderPage() {
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg mb-4">
               <h3 className="font-medium text-gray-800 mb-3">Deployed Contract Addresses</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">LoanFactory:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.LOAN_FACTORY || 'Not deployed'}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-700">EtherSwap:</span>
                   <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
@@ -296,16 +280,16 @@ export default function LenderPage() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Update BTC Public Key</h3>
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">New BTC Schnorr Public Key (32 characters)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">New BTC Schnorr Public Key (64 characters)</label>
                 <input
                   type="text"
                   value={newBtcPubkey}
                   onChange={(e) => setNewBtcPubkey(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="12345678901234567890123456789012"
-                  maxLength={32}
+                  placeholder="12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567"
+                  maxLength={64}
                 />
-                <p className="text-xs text-gray-500 mt-1">Must be exactly 32 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
               </div>
               <button
                 onClick={handleUpdateBtcPubkey}

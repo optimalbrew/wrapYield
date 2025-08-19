@@ -4,9 +4,8 @@ A wagmi-based React application for interacting with Bitcoin-collateralized loan
 
 ## Features
 
-- 🏦 **LoanFactory**: Deploy EtherSwap and BtcCollateralLoan contracts
-- 🔄 **EtherSwap**: Atomic swap functionality for Bitcoin-Ethereum
 - 💰 **BtcCollateralLoan**: Bitcoin-collateralized loan management
+- 🔄 **EtherSwap**: Atomic swap functionality for Bitcoin-Ethereum
 - 🧪 **Anvil Integration**: Local testing with reproducible accounts
 - 🎨 **Modern UI**: Built with Tailwind CSS and wagmi
 
@@ -60,7 +59,7 @@ The app will be available at `http://localhost:3000`
 
 ## Contract Deployment
 
-### Option 1: Deploy via Foundry (Recommended)
+### Deploy via Foundry
 
 1. **Navigate to the Foundry project directory:**
    ```bash
@@ -74,30 +73,36 @@ The app will be available at `http://localhost:3000`
 
 3. **Deploy all contracts using the deployment script:**
    ```bash
-   forge script script/Deploy.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
+   forge script script/DeployLoanContract.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
    ```
 
 4. **Update environment variables** with the deployed addresses:
    ```bash
    cd ../evm-dapp
-   echo "NEXT_PUBLIC_LOAN_FACTORY_ADDRESS=0x..." >> .env.local
    echo "NEXT_PUBLIC_ETHER_SWAP_ADDRESS=0x..." >> .env.local
    echo "NEXT_PUBLIC_BTC_COLLATERAL_LOAN_ADDRESS=0x..." >> .env.local
    ```
 
-### Option 2: Deploy via DApp UI
-
-1. **Start the development server** (`npm run dev`)
-2. **Connect your wallet** to the Anvil network
-3. **Use the "Deploy Contracts" button** in the UI
-4. **Copy the deployed addresses** to your `.env.local` file
-
 ### Deployment Verification
 
-After deployment, you should see:
-- ✅ **LoanFactory**: `0x1b09Db46C1a4CcCc3454a3eF753594757D2183c7`
-- ✅ **EtherSwap**: `0x5c1b83261330a5a73dE0837783B5cA057C646C9E`
-- ✅ **BtcCollateralLoan**: `0x5B5e3BFfD8E8FD1294A5E6529d98B120dBCDc63D`
+On successful deployment, we should be able to see the txid and the contract addresses, for example on anvil
+```@bash
+##### anvil-hardhat
+✅  [Success] Hash: 0x08a08734c739d24046990476b353ef48632f12e0d583d3edeb35ff1cd6f07ddc
+Contract Address: 0xb1Abb3712310432A94766c2795784789926F7f92
+Block: 5
+Paid: 0.001423983591884532 ETH (1800093 gas * 0.791061124 gwei)
+
+
+##### anvil-hardhat
+✅  [Success] Hash: 0xffca1117f0b0e497aa274e3fac765b9534c60fce2a9cdbfc0749ede065468888
+Contract Address: 0x49D2d2d6967FE41521Aa88514Db87d7b47746463
+Block: 4
+Paid: 0.0038888435438975 ETH (4485230 gas * 0.86703325 gwei)
+
+```
+
+
 
 ## Usage
 

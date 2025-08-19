@@ -24,27 +24,22 @@ async function main() {
   console.log('Lender address:', lenderAccount.address)
 
   try {
-    // Step 1: Deploy LoanFactory
-    console.log('\n📦 Deploying LoanFactory...')
-    const loanFactoryAddress = await deployLoanFactory()
-    console.log('✅ LoanFactory deployed at:', loanFactoryAddress)
-
-    // Step 2: Deploy contracts through factory
-    console.log('\n🏭 Deploying contracts through factory...')
-    const { etherSwapAddress, loanAddress } = await deployContractsThroughFactory(
-      loanFactoryAddress,
-      lenderAccount.address
-    )
-    console.log('✅ EtherSwap deployed at:', etherSwapAddress)
+    // Step 1: Deploy BtcCollateralLoan first
+    console.log('\n📦 Deploying BtcCollateralLoan...')
+    const loanAddress = await deployBtcCollateralLoan()
     console.log('✅ BtcCollateralLoan deployed at:', loanAddress)
+
+    // Step 2: Deploy EtherSwap with the loan contract address
+    console.log('\n🏭 Deploying EtherSwap...')
+    const etherSwapAddress = await deployEtherSwap(loanAddress)
+    console.log('✅ EtherSwap deployed at:', etherSwapAddress)
 
     // Step 3: Update environment variables
     console.log('\n📝 Updating environment variables...')
-    await updateEnvironmentVariables(loanFactoryAddress, etherSwapAddress, loanAddress)
+    await updateEnvironmentVariables(etherSwapAddress, loanAddress)
 
     console.log('\n🎉 Deployment completed successfully!')
     console.log('Contract addresses:')
-    console.log('- LoanFactory:', loanFactoryAddress)
     console.log('- EtherSwap:', etherSwapAddress)
     console.log('- BtcCollateralLoan:', loanAddress)
 
@@ -54,8 +49,8 @@ async function main() {
   }
 }
 
-async function deployLoanFactory(): Promise<string> {
-  // This would contain the actual deployment logic
+async function deployBtcCollateralLoan(): Promise<string> {
+  // This would contain the actual deployment logic for BtcCollateralLoan
   // For now, we'll simulate it
   const tx = await walletClient.sendTransaction({
     account: deployerAccount,
@@ -68,25 +63,20 @@ async function deployLoanFactory(): Promise<string> {
   return '0x1234567890123456789012345678901234567890'
 }
 
-async function deployContractsThroughFactory(
-  factoryAddress: string,
-  lenderAddress: string
-): Promise<{ etherSwapAddress: string; loanAddress: string }> {
-  // This would call the factory's deployContracts function
-  // For now, return placeholders
-  return {
-    etherSwapAddress: '0x2345678901234567890123456789012345678901',
-    loanAddress: '0x3456789012345678901234567890123456789012',
-  }
+async function deployEtherSwap(loanAddress: string): Promise<string> {
+  // This would deploy EtherSwap with the loan contract address
+  // For now, return a placeholder
+  return '0x2345678901234567890123456789012345678901'
 }
 
 async function updateEnvironmentVariables(
-  factoryAddress: string,
   etherSwapAddress: string,
   loanAddress: string
 ): Promise<void> {
   // This would update the .env.local file
   console.log('Environment variables updated')
+  console.log('NEXT_PUBLIC_ETHER_SWAP_ADDRESS=', etherSwapAddress)
+  console.log('NEXT_PUBLIC_BTC_COLLATERAL_LOAN_ADDRESS=', loanAddress)
 }
 
 main().catch(console.error)

@@ -1,15 +1,6 @@
 import { type Address } from 'viem'
 
 // Contract ABIs - these will be populated from the compiled contracts
-export const LOAN_FACTORY_ABI = [
-  // Basic contract functions
-  'function deployContracts(string memory lenderBtcPubkey, uint256 loanDuration, uint256 timelockLoanReq, uint256 timelockBtcEscrow, uint256 timelockRepaymentAccept, uint256 timelockBtcCollateral) external returns (address etherSwapAddress, address loanAddress)',
-  'function getEtherSwapBytecode(address loanContractAddress) external pure returns (bytes memory)',
-  'function getLoanBytecode(string memory lenderBtcPubkey, uint256 timelockLoanReq, uint256 timelockBtcEscrow, uint256 timelockRepaymentAccept, uint256 timelockBtcCollateral) external pure returns (bytes memory)',
-  // Events
-  'event ContractsDeployed(address indexed etherSwap, address indexed loanContract, address indexed lender)',
-] as const
-
 export const ETHER_SWAP_ABI = [
   // Basic contract functions
   'function lock(bytes32 preimageHash, address claimAddress, uint256 timelock) external payable',
@@ -172,7 +163,7 @@ export const BTC_COLLATERAL_LOAN_ABI = [
         {"name": "preimageHashBorrower", "type": "bytes32"},
         {"name": "preimageHashLender", "type": "bytes32"},
         {"name": "requestBlockheight", "type": "uint256"},
-        {"name": "offerBlockheight", "type": "uint256"},
+        {"name": "loanId", "type": "uint256"},
         {"name": "activationBlockheight", "type": "uint256"},
         {"name": "repaymentBlockheight", "type": "uint256"}
       ]
@@ -273,31 +264,17 @@ export const BTC_COLLATERAL_LOAN_ABI = [
 ] as const
 
 // Contract addresses (will be populated after deployment)
-// For testing, you can hardcoded these addresses here
-// For production, use environment variables as shown below
-
-
-
 export const CONTRACTS = {
   // Environment variable approach (using .env.local)
-  LOAN_FACTORY: process.env.NEXT_PUBLIC_LOAN_FACTORY_ADDRESS as Address,
   ETHER_SWAP: process.env.NEXT_PUBLIC_ETHER_SWAP_ADDRESS as Address,
   BTC_COLLATERAL_LOAN: process.env.NEXT_PUBLIC_BTC_COLLATERAL_LOAN_ADDRESS as Address,
   
   // Hardcoded addresses for testing (uncomment if you want to hardcode)
-  // LOAN_FACTORY: '0x0000000000000000000000000000000000000000' as Address,
   // ETHER_SWAP: '0x0000000000000000000000000000000000000000' as Address,
   // BTC_COLLATERAL_LOAN: '0x0000000000000000000000000000000000000000' as Address,
 } as const
 
-
-
 // Contract types
-export type LoanFactoryContract = {
-  address: Address
-  abi: typeof LOAN_FACTORY_ABI
-}
-
 export type EtherSwapContract = {
   address: Address
   abi: typeof ETHER_SWAP_ABI

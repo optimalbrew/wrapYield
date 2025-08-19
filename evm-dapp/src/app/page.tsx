@@ -2,7 +2,7 @@
 
 import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
-import { LOAN_FACTORY_ABI, ETHER_SWAP_ABI, BTC_COLLATERAL_LOAN_ABI, CONTRACTS } from '@/contracts'
+import { ETHER_SWAP_ABI, BTC_COLLATERAL_LOAN_ABI, CONTRACTS } from '@/contracts'
 import { ACCOUNTS, CONTRACT_CONFIG, BTC_PUBKEY_PLACEHOLDER } from '@/constants'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
@@ -17,46 +17,25 @@ function App() {
   
   // State to store contract addresses
   const [contractAddresses, setContractAddresses] = useState({
-    LOAN_FACTORY: '',
     ETHER_SWAP: '',
     BTC_COLLATERAL_LOAN: ''
   })
 
-
-
   // Monitor CONTRACTS changes
   useEffect(() => {
     // Check if all contracts are available
-    if (CONTRACTS.LOAN_FACTORY && CONTRACTS.ETHER_SWAP && CONTRACTS.BTC_COLLATERAL_LOAN) {
+    if (CONTRACTS.ETHER_SWAP && CONTRACTS.BTC_COLLATERAL_LOAN) {
       setContractsReady(true)
       
       // Set contract addresses in state
       setContractAddresses({
-        LOAN_FACTORY: CONTRACTS.LOAN_FACTORY,
         ETHER_SWAP: CONTRACTS.ETHER_SWAP,
         BTC_COLLATERAL_LOAN: CONTRACTS.BTC_COLLATERAL_LOAN
       })
     } else {
       setContractsReady(false)
     }
-  }, [CONTRACTS.LOAN_FACTORY, CONTRACTS.ETHER_SWAP, CONTRACTS.BTC_COLLATERAL_LOAN])
-
-  // Contract interactions
-  const { data: loanFactoryData, isLoading: loanFactoryLoading } = useReadContract({
-    address: contractAddresses.LOAN_FACTORY as `0x${string}`,
-    abi: LOAN_FACTORY_ABI,
-    functionName: 'getEtherSwapBytecode',
-    args: [ACCOUNTS.LENDER],
-    query: {
-      enabled: !!contractAddresses.LOAN_FACTORY,
-    },
-  })
-
-  const { writeContract: deployContracts, data: deployData, isPending: deployLoading } = useWriteContract()
-
-  const { isLoading: deployPending, isSuccess: deploySuccess } = useWaitForTransactionReceipt({
-    hash: deployData,
-  })
+  }, [CONTRACTS.ETHER_SWAP, CONTRACTS.BTC_COLLATERAL_LOAN])
 
   // Loan interaction functions
   const { writeContract: requestLoan, isPending: requestLoanLoading } = useWriteContract()
@@ -80,24 +59,6 @@ function App() {
   const [selectedLoanId, setSelectedLoanId] = useState('0')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x1234567890123456789012345678901234567890123456789012345678901234')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
-
-  const handleDeployContracts = () => {
-    if (!deployContracts) return
-
-    deployContracts({
-      address: contractAddresses.LOAN_FACTORY as `0x${string}`,
-      abi: LOAN_FACTORY_ABI,
-      functionName: 'deployContracts',
-      args: [
-        BTC_PUBKEY_PLACEHOLDER,
-        CONTRACT_CONFIG.LOAN_DURATION,
-        CONTRACT_CONFIG.TIMELOCK_LOAN_REQ,
-        CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW,
-        CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT,
-        CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL,
-      ],
-    })
-  }
 
   const handleRequestLoan = () => {
     if (!requestLoan) return
@@ -141,7 +102,7 @@ function App() {
       functionName: 'acceptLoanOffer',
       args: [
         BigInt(selectedLoanId), // loanId
-        preimageHashBorrower, // preimageBorrower
+        preimageHashBorrower, // preimageHashBorrower
       ],
     })
   }
@@ -170,7 +131,7 @@ function App() {
       functionName: 'acceptLoanRepayment',
       args: [
         BigInt(selectedLoanId), // loanId
-        preimageHashLender, // preimageLender
+        preimageHashLender, // preimageHashLender
       ],
     })
   }
@@ -232,24 +193,10 @@ function App() {
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4 text-gray-800">Contract Status</h2>
             
-
-            
-
-            
-
-
-
-
             {/* Contract Addresses Display */}
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg mb-4">
               <h3 className="font-medium text-gray-800 mb-3">Deployed Contract Addresses</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">LoanFactory:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {contractAddresses.LOAN_FACTORY || 'Not deployed'}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-700">EtherSwap:</span>
                   <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
@@ -299,47 +246,8 @@ function App() {
                 <div className="font-medium">Total Loans: {totalLoans ? Number(totalLoans) : 0}</div>
               </div>
             </div>
-
-
-
-
-
-
           </div>
         )}
-
-        {/* Deploy Contracts */}
-        {contractAddresses.LOAN_FACTORY && !contractAddresses.ETHER_SWAP && (
-          <div className="mb-6">
-            <h3 className="text-lg font-medium mb-3">Deploy Contracts</h3>
-            <div className="bg-blue-50 p-4 rounded-md mb-4">
-              <div className="text-sm text-blue-800">
-                <div className="font-medium mb-2">Configuration:</div>
-                <div>• Loan Duration: {CONTRACT_CONFIG.LOAN_DURATION} blocks</div>
-                <div>• Timelock Loan Request: {CONTRACT_CONFIG.TIMELOCK_LOAN_REQ} blocks</div>
-                <div>• Timelock BTC Escrow: {CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW} blocks</div>
-                <div>• Timelock Repayment Accept: {CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT} blocks</div>
-                <div>• Timelock BTC Collateral: {CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL} blocks</div>
-              </div>
-            </div>
-            
-            <button
-              onClick={handleDeployContracts}
-              disabled={deployLoading || deployPending}
-              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-md transition-colors"
-            >
-              {deployLoading ? 'Preparing...' : deployPending ? 'Deploying...' : 'Deploy Contracts'}
-            </button>
-            
-            {deploySuccess && (
-              <div className="mt-3 text-sm text-green-600">
-                ✅ Contracts deployed successfully!
-              </div>
-            )}
-          </div>
-        )}
-
-
       </div>
     </div>
   )

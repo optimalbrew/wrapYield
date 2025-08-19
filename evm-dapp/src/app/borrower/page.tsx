@@ -45,7 +45,7 @@ export default function BorrowerPage() {
   const [loanAmount, setLoanAmount] = useState('0.01')
   const [collateralAmount, setCollateralAmount] = useState('0.02')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
-  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('12345678901234567890123456789012')
+  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678')
   const [btcAddress, setBtcAddress] = useState('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x1234567890123456789012345678901234567890123456789012345678901234')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
@@ -189,9 +189,9 @@ export default function BorrowerPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="font-medium text-green-800">LoanFactory</div>
+                <div className="font-medium text-green-800">EtherSwap</div>
                 <div className="text-green-600">
-                  {CONTRACTS.LOAN_FACTORY ? (
+                  {CONTRACTS.ETHER_SWAP ? (
                     <span className="text-green-700">✅ Deployed</span>
                   ) : (
                     <span className="text-red-600">❌ Not Deployed</span>
@@ -224,12 +224,6 @@ export default function BorrowerPage() {
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg mb-4">
               <h3 className="font-medium text-gray-800 mb-3">Deployed Contract Addresses</h3>
               <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">LoanFactory:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.LOAN_FACTORY || 'Not deployed'}
-                  </span>
-                </div>
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-700">EtherSwap:</span>
                   <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
@@ -309,16 +303,16 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your BTC Schnorr Public Key (32 characters)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Your BTC Schnorr Public Key (64 characters)</label>
                 <input
                   type="text"
                   value={borrowerBtcPubkey}
                   onChange={(e) => setBorrowerBtcPubkey(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="12345678901234567890123456789012"
-                  maxLength={32}
+                  placeholder="12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+                  maxLength={64}
                 />
-                <p className="text-xs text-gray-500 mt-1">Must be exactly 32 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
               </div>
 
               <div className="mb-4">
