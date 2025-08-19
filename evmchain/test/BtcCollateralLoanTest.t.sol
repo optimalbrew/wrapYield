@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import "../lib/forge-std/src/Test.sol";
 import "../src/BtcCollateralLoan.sol";
 import "../src/EtherSwap.sol";
-import "../src/LoanFactory.sol";
+import "../src/LoanFactory.sol"; //used for testing. Deploying will fail due to large contract size.
 
 contract BtcCollateralLoanTest is Test {
     BtcCollateralLoan public loan;
@@ -15,9 +15,10 @@ contract BtcCollateralLoanTest is Test {
     address public borrower;
     address public borrower2;
     
-    // Test data - 32 bytes each
-    string public constant LENDER_BTC_PUBKEY = "12345678901234567890123456789012";
-    string public constant BORROWER_BTC_PUBKEY = "abcdef0123456789abcdef0123456789";
+    // Test data - 32 bytes (64 char hex string) each for pubkeys, 63 or 64 char for address (not hex)
+    string public constant LENDER_BTC_PUBKEY = "12345678901234567890123456789012abcdef0123456789abcdef0123456789";
+    string public constant BORROWER_BTC_PUBKEY = "abcdef0123456789abcdef012345678912345678901234567890123456789012";
+    // this is NOT a HEX string, it is a base58 encoded address. Actual validity is not checked.
     string public constant BORROWER_BTC_ADDRESS = "bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5j";
     
     uint256 public constant LOAN_AMOUNT = 1 ether;
@@ -129,7 +130,7 @@ contract BtcCollateralLoanTest is Test {
     }
 
     function testConstructorInvalidBtcPubkey() public {
-        vm.expectRevert("Loan: invalid BTC Schnorr (x only) pubkey");
+        vm.expectRevert("Loan: inval BTC pubkey");
         new BtcCollateralLoan(
             "0x123456789012345678901234567890123456789012345678901234567890123", // 31 bytes
             LOAN_DURATION,
@@ -146,7 +147,7 @@ contract BtcCollateralLoanTest is Test {
         address newEtherSwap = makeAddr("newEtherSwap");
         
         vm.startPrank(lender);
-        vm.expectRevert("Loan: EtherSwap address already set");
+        vm.expectRevert("Loan: EtherSwap addr already set");
         loan.setEtherSwapAddress(newEtherSwap);
         vm.stopPrank();
     }
@@ -180,7 +181,7 @@ contract BtcCollateralLoanTest is Test {
     function testRequestLoanInsufficientFee() public {
         vm.startPrank(borrower);
         
-        vm.expectRevert("Loan: insufficient processing fee");
+        vm.expectRevert("Loan: insuff proc fee");
         loan.requestLoan{value: PROCESSING_FEE - 0.0001 ether}(
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
@@ -194,7 +195,7 @@ contract BtcCollateralLoanTest is Test {
     function testRequestLoanBelowMinimum() public {
         vm.startPrank(borrower);
         
-        vm.expectRevert("Loan: amount must be greater than minimum loan amount");
+        vm.expectRevert("Loan: amt must be > min");
         loan.requestLoan{value: PROCESSING_FEE}(
             MIN_LOAN_AMOUNT - 0.001 ether,
             BORROWER_BTC_ADDRESS,
@@ -208,7 +209,7 @@ contract BtcCollateralLoanTest is Test {
     function testRequestLoanInvalidBtcAddress() public {
         vm.startPrank(borrower);
         
-        vm.expectRevert("Loan: invalid BTC P2TR address");
+        vm.expectRevert("Loan: inval P2TR addr");
         loan.requestLoan{value: PROCESSING_FEE}(
             LOAN_AMOUNT,
             "invalid_address",
@@ -222,7 +223,7 @@ contract BtcCollateralLoanTest is Test {
     function testRequestLoanInvalidBtcPubkey() public {
         vm.startPrank(borrower);
         
-        vm.expectRevert("Loan: invalid BTC Schnorr (x only) pubkey");
+        vm.expectRevert("Loan: inval BTC pubkey");
         loan.requestLoan{value: PROCESSING_FEE}(
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
@@ -239,7 +240,7 @@ contract BtcCollateralLoanTest is Test {
         
         // Try to request second loan
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: borrower already has active loan");
+        vm.expectRevert("Loan: borrower has active loan");
         loan.requestLoan{value: PROCESSING_FEE}(
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
@@ -276,7 +277,7 @@ contract BtcCollateralLoanTest is Test {
         uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
         
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: caller is not the lender");
+        vm.expectRevert("Loan: caller not lender");
             loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             loanId,
             preimageHashBorrower,
@@ -291,7 +292,7 @@ contract BtcCollateralLoanTest is Test {
         
         vm.startPrank(lender);
         //once the loan is offered, the lender cannot extend the offer again
-        vm.expectRevert("Loan: incorrect loan status");
+        vm.expectRevert("Loan: incorrect status");
         loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
             loanId,
             preimageHashBorrower,
@@ -330,7 +331,7 @@ contract BtcCollateralLoanTest is Test {
         offerLoan(loanId);
         
         vm.startPrank(borrower2);
-        vm.expectRevert("Loan: caller is not the borrower");
+        vm.expectRevert("Loan: caller not borrower");
         loan.acceptLoanOffer(loanId, preimageBorrower);
         vm.stopPrank();
     }
@@ -377,7 +378,7 @@ contract BtcCollateralLoanTest is Test {
         acceptLoan(loanId);
         
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: incorrect repayment amount");
+        vm.expectRevert("Loan: incorrect rpmt amt");
         loan.attemptRepayment{value: LOAN_AMOUNT - 0.1 ether}(loanId, preimageHashLender);
         vm.stopPrank();
     }
@@ -388,7 +389,7 @@ contract BtcCollateralLoanTest is Test {
         acceptLoan(loanId);
         vm.roll(block.number + LOAN_DURATION + 1); //use `vmwarp()` if switching to timestamp instead of block number
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: loan is past due");
+        vm.expectRevert("Loan: past due");
         loan.attemptRepayment{value: LOAN_AMOUNT}(loanId, preimageHashLender);
         vm.stopPrank();
     }
@@ -468,7 +469,7 @@ contract BtcCollateralLoanTest is Test {
         acceptLoan(loanId);
         
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: cannot delete active loan");
+        vm.expectRevert("Loan: cant delete active loan");
         loan.deleteCompletedLoan(loanId);
         vm.stopPrank();
     }
@@ -565,7 +566,7 @@ contract BtcCollateralLoanTest is Test {
         payable(address(loan)).transfer(1 ether);
         
         vm.startPrank(borrower);
-        vm.expectRevert("Loan: caller is not the lender");
+        vm.expectRevert("Loan: caller not lender");
         loan.emergencyWithdraw();
         vm.stopPrank();
     }
@@ -596,14 +597,14 @@ contract BtcCollateralLoanTest is Test {
     function testExtractTimestampHeaderTooLong() public {
         //header is too long
         bytes memory header = hex"000000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
-        vm.expectRevert("Invalid header length");
+        vm.expectRevert("Invalid hdr len");
         loan.extractTimestamp(header);
     }   
 
     function testExtractTimestampHeaderTooShort() public {
         //header is too short
         bytes memory header = hex"602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a";
-        vm.expectRevert("Invalid header length");
+        vm.expectRevert("Invalid hdr len");
         loan.extractTimestamp(header);
     }
 

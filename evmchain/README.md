@@ -54,6 +54,11 @@ Gas used: 92595
 ```
 
 
+=============
+
+The following information is outdated.
+
+
 Now let's create a script `SetupTestEnv.s.sol` to set up a local test environment and allocate 1 ETH to each of these addresses. We'll create a new script that will:
 * Start a local Anvil node
 * Fund each address with 1 ETH

@@ -9,6 +9,10 @@ import "./BtcCollateralLoan.sol";
  * @dev Factory contract that deploys both EtherSwap and BtcCollateralLoan contracts
  * in the correct order to maintain the security model where EtherSwap can only be
  * called by the authorized loan contract.
+ * 
+ * @notice This contract is used for testing.
+ * Using to deploy will fail due to large deployment size.
+ * 
  */
 contract LoanFactory {
     // Events
@@ -37,7 +41,7 @@ contract LoanFactory {
         uint256 timelockBtcCollateral
     ) external returns (address etherSwapAddress, address loanAddress) {
         // Validate parameters
-        require(bytes(lenderBtcPubkey).length == 32, "Factory: invalid BTC Schnorr pubkey");
+        require(bytes(lenderBtcPubkey).length == 64, "Factory: invalid BTC Schnorr pubkey"); //need 64 chars hex string
         require(timelockBtcEscrow > timelockLoanReq, "Factory: t_0 must be > t_B");
         require(timelockBtcCollateral > timelockRepaymentAccept, "Factory: t_1 must be > t_L");
 

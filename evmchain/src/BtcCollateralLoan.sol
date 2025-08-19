@@ -30,7 +30,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     /// @dev The EtherSwap contract instance
     EtherSwap public etherSwap;
 
-    /// @dev Current lender's Bitcoin Schnorr (x only) public key, 32 bytes
+    /// @dev Current lender's Bitcoin Schnorr (x only) public key, 32 bytes (assumed valid, only solidity length check)
     string public lenderBtcPubkey;
 
     /// @dev Contract parameters
@@ -138,33 +138,33 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     // ============ MODIFIERS ============
 
     modifier onlyLender() {
-        require(msg.sender == owner(), "Loan: caller is not the lender");
+        require(msg.sender == owner(), "Loan: caller not lender");
         _;
     }
 
     modifier loanExists(uint256 loanId) {
         //Note: this just checks for valid index as fast fail. If a loan has been deleted, it will not be in the mapping
         // but solidity will not revert and will return a default value for the struct.
-        require(loanId > 0 && loanId <= _loanIds, "Loan: loan does not exist");
+        require(loanId > 0 && loanId <= _loanIds, "Loan: does not exist");
         _;
     }
 
     modifier correctLoanStatus(uint256 loanId, LoanStatus expectedStatus) {
-        require(loans[loanId].status == expectedStatus, "Loan: incorrect loan status");
+        require(loans[loanId].status == expectedStatus, "Loan: incorrect status");
         _;
     }
 
     // ============ CONSTRUCTOR ============
 
     constructor(
-        string memory _lenderBtcPubkey, // Schnorr (x only) public key, 32 bytes
+        string memory _lenderBtcPubkey, // Schnorr (x only) public key, 32 bytes (64 char hex string)
         uint256 _loanDuration,
         uint256 _timelockLoanReq,
         uint256 _timelockBtcEscrow,
         uint256 _timelockRepaymentAccept,
         uint256 _timelockBtcCollateral
     ) Ownable(msg.sender) {
-        require(bytes(_lenderBtcPubkey).length == 32, "Loan: invalid BTC Schnorr (x only) pubkey");
+        require(bytes(_lenderBtcPubkey).length == 64, "Loan: inval BTC pubkey"); //need x only pubkey
 
         lenderBtcPubkey = _lenderBtcPubkey;
         loanDuration = _loanDuration;
@@ -181,8 +181,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
      * @param _etherSwapAddress The EtherSwap contract address
      */
     function setEtherSwapAddress(address _etherSwapAddress) external onlyLender {
-        require(_etherSwapAddress != address(0), "Loan: invalid EtherSwap address");
-        require(address(etherSwap) == address(0), "Loan: EtherSwap address already set");
+        require(_etherSwapAddress != address(0), "Loan: inval EtherSwap addr");
+        require(address(etherSwap) == address(0), "Loan: EtherSwap addr already set");
         
         etherSwap = EtherSwap(_etherSwapAddress);
         emit EtherSwapAddressSet(_etherSwapAddress);
@@ -192,10 +192,10 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
     /**
      * @dev Update lender's Bitcoin public key
-     * @param newBtcPubkey New Bitcoin public key
+     * @param newBtcPubkey New Bitcoin public key (64 char hex string)  
      */
     function updateLenderBtcPubkey(string memory newBtcPubkey) external onlyLender {
-        require(bytes(newBtcPubkey).length == 32, "Loan: invalid BTC Schnorr (x only) pubkey");
+        require(bytes(newBtcPubkey).length == 64, "Loan: inval BTC pubkey"); //need x only pubkey
         lenderBtcPubkey = newBtcPubkey;
         emit LenderUpdated(msg.sender, newBtcPubkey);
     }
@@ -211,8 +211,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         uint256 _timelockRepaymentAccept,
         uint256 _timelockBtcCollateral
     ) external onlyLender {
-        require(_timelockBtcEscrow > _timelockLoanReq, "Loan: t_0 must be > t_B");
-        require(_timelockBtcCollateral > _timelockRepaymentAccept, "Loan: t_1 must be > t_L");
+        require(_timelockBtcEscrow > _timelockLoanReq, "Loan: t_0 must > t_B");
+        require(_timelockBtcCollateral > _timelockRepaymentAccept, "Loan: t_1 must > t_L");
 
         loanDuration = _loanDuration;
         timelockLoanReq = _timelockLoanReq;
@@ -325,7 +325,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(
             //this should use block number
             block.number > loan.activationBlockheight + loanDuration,
-            "Loan: loan cannot be marked as defaulted yet"
+            "Loan: cannot mark defaulted yet"
         );
         loan.status = LoanStatus.Defaulted;
 
@@ -350,11 +350,11 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         string memory btcPubkey,
         bytes32 preimageHashBorrower
     ) external payable nonReentrant {
-        require(msg.value >= PROCESSING_FEE, "Loan: insufficient processing fee");
-        require(amount >= MIN_LOAN_AMOUNT, "Loan: amount must be greater than minimum loan amount");
-        require(bytes(btcAddress).length >= 62 && bytes(btcAddress).length <= 63, "Loan: invalid BTC P2TR address");
-        require(bytes(btcPubkey).length == 32, "Loan: invalid BTC Schnorr (x only) pubkey");
-        require(borrowerToLoanId[msg.sender] == 0, "Loan: borrower already has active loan");
+        require(msg.value >= PROCESSING_FEE, "Loan: insuff proc fee");
+        require(amount >= MIN_LOAN_AMOUNT, "Loan: amt must be > min");
+        require(bytes(btcAddress).length >= 62 && bytes(btcAddress).length <= 63, "Loan: inval P2TR addr");
+        require(bytes(btcPubkey).length == 64, "Loan: inval BTC pubkey");
+        require(borrowerToLoanId[msg.sender] == 0, "Loan: borrower has active loan");
 
         _loanIds++;
         uint256 loanId = _loanIds;
@@ -391,7 +391,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         nonReentrant
     {
         Loan storage loan = loans[loanId];
-        require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
+        require(msg.sender == loan.borrowerAddr, "Loan: caller not borrower");
 
         // Claim loan from EtherSwap
         uint256 timelock = block.number + timelockLoanReq;
@@ -429,8 +429,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         Loan storage loan = loans[loanId];
         // anyone can repay a loan
         //require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
-        require(block.number < loan.activationBlockheight + loanDuration, "Loan: loan is past due");
-        require(msg.value == loan.amount, "Loan: incorrect repayment amount");
+        require(block.number < loan.activationBlockheight + loanDuration, "Loan: past due");
+        require(msg.value == loan.amount, "Loan: incorrect rpmt amt");
 
         // Lock repayment in EtherSwap
         uint256 timelock = block.number + timelockRepaymentAccept;
@@ -454,8 +454,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     {
         Loan storage loan = loans[loanId];
         // this we restrict to borrower for now.
-        require(msg.sender == loan.borrowerAddr, "Loan: caller is not the borrower");
-        require(loan.preimageHashLender == bytes32(0), "Loan: repayment already accepted by lender");
+        require(msg.sender == loan.borrowerAddr, "Loan: caller not borrower");
+        require(loan.preimageHashLender == bytes32(0), "Loan: rpmt already accepted");
 
         // Refund from EtherSwap
         uint256 timelock = block.number + timelockRepaymentAccept;
@@ -479,7 +479,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
      * may be useful later is switching from block number to timestamp
      */
     function extractTimestamp(bytes memory header) public pure returns (uint32) {
-        require(header.length == 80, "Invalid header length");
+        require(header.length == 80, "Invalid hdr len");
 
         // Extract timestamp from bytes 68-71 (little-endian)
         uint32 ts =
@@ -532,7 +532,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(
             loan.status == LoanStatus.Repaid || loan.status == LoanStatus.Defaulted
                 || loan.status == LoanStatus.RefundedToLender || loan.status == LoanStatus.RefundedToBorrower,
-            "Loan: cannot delete active loan"
+            "Loan: cant delete active loan"
         );
 
         // Only the borrower or lender can delete the loan
