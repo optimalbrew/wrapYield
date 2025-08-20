@@ -76,6 +76,8 @@ The app will be available at `http://localhost:3000`
    forge script script/DeployLoanContract.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
    ```
 
+   or without `broadcast` to simulate prior to actual deployment
+
 4. **Update environment variables** with the deployed addresses:
    ```bash
    cd ../evm-dapp
@@ -189,15 +191,34 @@ The app is configured for testing with:
 
 ### Test Accounts (Anvil Seed 2)
 
-- **Deployer**: `0x8995E44a22e303A79bdD2E6e41674fb92d620863`
-- **Lender**: `0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e`
-- **Borrower**: `0x61Da7c7F97EBE53AD7c4E5eCD3d117E7Ab430eA7`
+- **Deployer/Lender**: `0x8995E44a22e303A79bdD2E6e41674fb92d620863`
+- **Borrower1**: `0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e`
+- **Borrower2**: `0x61Da7c7F97EBE53AD7c4E5eCD3d117E7Ab430eA7`
 - **User 3**: `0x5b0248e30583CeD4F09726C547935552C469EB24`
 - **User 4**: `0xcDbc8abb83E01BaE13ECE8853a5Ca84b2Ef6Ca86`
 
 Example to see the accouts work, a simple send
 ```
 cast send --from 0x8995E44a22e303A79bdD2E6e41674fb92d620863 0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e --value 1000000000000000 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --rpc-url http://127.0.0.1:8545
+```
+
+## Helper examples
+
+```
+cast call 0x02b8afd8146b7bc6bd4f02782c18bd4649be1605 "LENDER_BOND_PERCENTAGE()" --rpc-url http://127.0.0.1:8545
+```
+
+```
+cast call 0x02b8afd8146b7bc6bd4f02782c18bd4649be1605 "getLoan(uint256)" 1 --rpc-url http://127.0.0.1:8545 | cut -c 193-256
+
+# then convert
+cast --to-dec 0x00000000000000000000000000000000000000000000000000002386f26fc100
+```
+
+mempool: 
+```
+cast rpc txpool_status --rpc-url http://127.0.0.1:8545
+cast rpc txpool_inspect --rpc-url http://127.0.0.1:8545
 ```
 
 
@@ -232,13 +253,15 @@ Enable debug logging by setting:
 NEXT_PUBLIC_DEBUG=true
 ```
 
-## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+## Preimage generation for testing
+There are helper scripts to generate preimages and hashes for borrower and lenders in the `evmchain` directory.
+
+```
+# from evmchain directory
+forge script script/preimageGenerator.sol
+python3 misc/hasher.py
+```
 
 ## License
 

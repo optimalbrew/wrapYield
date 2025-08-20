@@ -22,16 +22,16 @@ export const account3 = privateKeyToAccount(privateKey3)
 export const account4 = privateKeyToAccount(privateKey4)
 export const account5 = privateKeyToAccount(privateKey5)
 
-// Account addresses
+// Account addresses: should not be really needed here, should be in the contract storage
 export const ACCOUNTS = {
-  DEPLOYER: '0x8995E44a22e303A79bdD2E6e41674fb92d620863',
-  LENDER: '0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e',
-  BORROWER: '0x61Da7c7F97EBE53AD7c4E5eCD3d117E7Ab430eA7',
-  USER3: '0x5b0248e30583CeD4F09726C547935552C469EB24',
-  USER4: '0xcDbc8abb83E01BaE13ECE8853a5Ca84b2Ef6Ca86',
+  LENDER: '0x8995E44a22e303A79bdD2E6e41674fb92d620863',
+  BORROWER1: '0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e',
+  BORROWER2: '0x61Da7c7F97EBE53AD7c4E5eCD3d117E7Ab430eA7',
+  BORROWER3: '0x5b0248e30583CeD4F09726C547935552C469EB24',
+  BORROWER4: '0xcDbc8abb83E01BaE13ECE8853a5Ca84b2Ef6Ca86',
 } as const
 
-// Contract configuration
+// Contract configuration: these can be changed by lender (who is the owner of the contract)
 export const CONTRACT_CONFIG = {
   LOAN_DURATION: 3000 * 180, // 6 months on Rootstock (3000 blocks per day * 180 days)
   TIMELOCK_LOAN_REQ: 100, // t_B: 100 blocks
@@ -42,3 +42,14 @@ export const CONTRACT_CONFIG = {
 
 // Bitcoin public key placeholder (64 characters - 32 bytes)
 export const BTC_PUBKEY_PLACEHOLDER = '0x12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678'
+
+// Network configuration
+export const NETWORK_CONFIG = {
+  ANVIL: {
+    chainId: 31337,
+    chainIdHex: '0x7A69',
+    name: 'Anvil Local',
+    rpcUrl: process.env.NEXT_PUBLIC_ANVIL_RPC_URL || 'http://127.0.0.1:8545',
+    blockExplorerUrl: 'http://localhost:8545',
+  },
+} as const

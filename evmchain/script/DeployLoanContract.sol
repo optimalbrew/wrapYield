@@ -39,8 +39,9 @@ contract DeployScript is Script {
         console.log("Transferred ownership to lender: ", msg.sender);
 
         // Print the addresses to the console for the frontend to use e.g. Wagmi dapp environment variables
-        console.log("NEXT_PUBLIC_ETHER_SWAP_ADDRESS=",address (etherSwap));
-        console.log("NEXT_PUBLIC_BTC_COLLATERAL_LOAN_ADDRESS=", address(loan));
+        //concat strings to avoid space after =
+        console.log(string.concat("NEXT_PUBLIC_ETHER_SWAP_ADDRESS=", vm.toString(address(etherSwap))));
+        console.log(string.concat("NEXT_PUBLIC_BTC_COLLATERAL_LOAN_ADDRESS=", vm.toString(address(loan))));
 
         vm.stopBroadcast();
     }

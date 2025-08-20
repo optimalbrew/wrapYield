@@ -1,27 +1,74 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { BTC_COLLATERAL_LOAN_ABI, CONTRACTS } from '@/contracts'
-import { ACCOUNTS, CONTRACT_CONFIG, BTC_PUBKEY_PLACEHOLDER } from '@/constants'
+import { NETWORK_CONFIG } from '@/constants'
 import Link from 'next/link'
+import { useWalletValidation } from '@/hooks/useWalletValidation'
+import { switchToAnvil } from '@/utils/networkUtils'
 
 export default function LenderPage() {
-  const account = useAccount()
+  // Helper function to safely serialize loan details
+  const serializeLoanDetails = (data: any) => {
+    try {
+      return JSON.stringify(data, (key, value) => 
+        typeof value === 'bigint' ? value.toString() : value
+      , 2)
+    } catch (e) {
+      return 'Error serializing data'
+    }
+  }
+  // All contract interaction functions are protected with wallet signature requirements:
+  // - handleExtendLoanOffer: Extends loan offers (requires wallet signature)
+  // - handleAcceptRepayment: Accepts loan repayments (requires wallet signature)
+  // - handleMarkAsDefaulted: Marks loans as defaulted (requires wallet signature)
+  // - handleUpdateBtcPubkey: Updates BTC public key (requires wallet signature)
+  // - handleUpdateParameters: Updates contract parameters (requires wallet signature)
+  
+  const { validateWalletAndContracts, account } = useWalletValidation()
   const { connectors, connect, status, error } = useConnect()
   const { disconnect } = useDisconnect()
+
+
 
   // Type annotations for contract data
   type LenderBtcPubkeyResult = string | undefined
   type TotalLoansResult = bigint | undefined
 
   // Contract interaction functions
-  const { writeContract: updateBtcPubkey, isPending: updatePubkeyLoading } = useWriteContract()
-  const { writeContract: updateParameters, isPending: updateParamsLoading } = useWriteContract()
-  const { writeContract: extendLoanOffer, isPending: offerLoading } = useWriteContract()
-  const { writeContract: acceptRepayment, isPending: acceptRepaymentLoading } = useWriteContract()
-  const { writeContract: markAsDefaulted, isPending: defaultLoading } = useWriteContract()
+  const { writeContract: updateBtcPubkey, isPending: updatePubkeyLoading, data: updatePubkeyHash } = useWriteContract()
+  const { writeContract: updateParameters, isPending: updateParamsLoading, data: updateParamsHash } = useWriteContract()
+  const { writeContract: extendLoanOffer, isPending: offerLoading, data: extendOfferHash } = useWriteContract()
+  const { writeContract: acceptRepayment, isPending: acceptRepaymentLoading, data: acceptRepaymentHash } = useWriteContract()
+  const { writeContract: markAsDefaulted, isPending: defaultLoading, data: markAsDefaultedHash } = useWriteContract()
+
+  // Transaction monitoring
+  const { isLoading: isUpdatePubkeyConfirming, isSuccess: isUpdatePubkeySuccess } = useWaitForTransactionReceipt({
+    hash: updatePubkeyHash,
+    query: { enabled: !!updatePubkeyHash }
+  })
+  
+  const { isLoading: isUpdateParamsConfirming, isSuccess: isUpdateParamsSuccess } = useWaitForTransactionReceipt({
+    hash: updateParamsHash,
+    query: { enabled: !!updateParamsHash }
+  })
+  
+  const { isLoading: isExtendOfferConfirming, isSuccess: isExtendOfferSuccess } = useWaitForTransactionReceipt({
+    hash: extendOfferHash,
+    query: { enabled: !!extendOfferHash }
+  })
+  
+  const { isLoading: isAcceptRepaymentConfirming, isSuccess: isAcceptRepaymentSuccess } = useWaitForTransactionReceipt({
+    hash: acceptRepaymentHash,
+    query: { enabled: !!acceptRepaymentHash }
+  })
+  
+  const { isLoading: isMarkAsDefaultedConfirming, isSuccess: isMarkAsDefaultedSuccess } = useWaitForTransactionReceipt({
+    hash: markAsDefaultedHash,
+    query: { enabled: !!markAsDefaultedHash }
+  })
 
   // Contract data
   const { data: lenderBtcPubkey, refetch: refetchPubkey, error: pubkeyError } = useReadContract({
@@ -43,6 +90,8 @@ export default function LenderPage() {
     },
   }) as { data: TotalLoansResult, refetch: () => void, error: Error | null }
 
+
+
   // Debug information
   const debugInfo = {
     contractAddress: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -61,6 +110,8 @@ export default function LenderPage() {
     }
   }, [CONTRACTS.BTC_COLLATERAL_LOAN, account.status]) // Removed totalLoans from dependency array
 
+
+
   // Form state
   const [newBtcPubkey, setNewBtcPubkey] = useState('')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
@@ -72,9 +123,130 @@ export default function LenderPage() {
   const [newTimelockRepaymentAccept, setNewTimelockRepaymentAccept] = useState('150')
   const [newTimelockBtcCollateral, setNewTimelockBtcCollateral] = useState('250')
 
+  // Get loan details for bond calculation
+  const { data: loanDetails, refetch: refetchLoanDetails } = useReadContract({
+    address: CONTRACTS.BTC_COLLATERAL_LOAN,
+    abi: BTC_COLLATERAL_LOAN_ABI,
+    functionName: 'getLoan',
+    args: [BigInt(selectedLoanId || '0')],
+    query: {
+      enabled: !!CONTRACTS.BTC_COLLATERAL_LOAN && account.status === 'connected' && !!selectedLoanId && selectedLoanId !== '0',
+    },
+  }) as { data: any, refetch: () => void, error: Error | null }
+
+  // Monitor transaction success and log hashes
+  useEffect(() => {
+    // Log transaction hashes to console for debugging
+    if (extendOfferHash) {
+      console.log('🚀 Extend Loan Offer Transaction Hash:', extendOfferHash)
+      console.log('Transaction Details:', {
+        function: 'extendLoanOffer',
+        loanId: selectedLoanId,
+        bondAmount: loanDetails && loanDetails.amount ? formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)) + ' ETH' : '0.01 ETH (fallback)',
+        amountToSend: loanDetails && loanDetails.amount ? formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))) + ' ETH' : '0.01 ETH (fallback)',
+        hash: extendOfferHash
+      })
+    }
+    
+    if (acceptRepaymentHash) {
+      console.log('💰 Accept Repayment Transaction Hash:', acceptRepaymentHash)
+    }
+    
+    if (markAsDefaultedHash) {
+      console.log('⚠️ Mark As Defaulted Transaction Hash:', markAsDefaultedHash)
+    }
+    
+    if (updatePubkeyHash) {
+      console.log('🔑 Update BTC Pubkey Transaction Hash:', updatePubkeyHash)
+    }
+    
+    if (updateParamsHash) {
+      console.log('⚙️ Update Parameters Transaction Hash:', updateParamsHash)
+    }
+  }, [extendOfferHash, acceptRepaymentHash, markAsDefaultedHash, updatePubkeyHash, updateParamsHash, selectedLoanId, loanDetails])
+
+  // Refetch loan details when selectedLoanId changes
+  useEffect(() => {
+    if (selectedLoanId && selectedLoanId !== '0' && CONTRACTS.BTC_COLLATERAL_LOAN) {
+      console.log('🔄 Refetching loan details for loan ID:', selectedLoanId)
+      refetchLoanDetails()
+    }
+  }, [selectedLoanId, CONTRACTS.BTC_COLLATERAL_LOAN, refetchLoanDetails])
+
+  // Debug loan details when they change
+  useEffect(() => {
+    if (loanDetails) {
+      console.log('📋 Loan Details Loaded:', {
+        loanId: selectedLoanId,
+        data: loanDetails,
+        dataType: typeof loanDetails,
+        isArray: Array.isArray(loanDetails),
+        length: Array.isArray(loanDetails) ? loanDetails.length : 'N/A',
+        hasAmount: !!loanDetails.amount,
+        amount: loanDetails.amount
+      })
+    }
+  }, [loanDetails, selectedLoanId])
+
+
+
+  // Get current nonce for the connected account
+  const { data: currentNonce, refetch: refetchNonce } = useReadContract({
+    address: CONTRACTS.BTC_COLLATERAL_LOAN,
+    abi: [{ inputs: [], name: 'nonce', outputs: [{ type: 'uint256' }], stateMutability: 'view', type: 'function' }],
+    functionName: 'nonce',
+    args: [],
+    query: {
+      enabled: !!CONTRACTS.BTC_COLLATERAL_LOAN && account.status === 'connected' && !!account.addresses?.[0],
+    },
+  }) as { data: bigint | undefined, refetch: () => void }
+
+  // State for account transaction nonce
+  const [accountNonce, setAccountNonce] = useState<number | null>(null)
+
+  // Function to check and sync nonce before sending transaction
+  const checkAndSyncNonce = async () => {
+    if (!account.addresses?.[0]) return false
+    
+    try {
+      // Get current nonce from the blockchain
+              const response = await fetch(NETWORK_CONFIG.ANVIL.rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionCount',
+          params: [account.addresses[0], 'latest'],
+          id: 1
+        })
+      })
+      
+      const result = await response.json()
+      if (result.result) {
+        const blockchainNonce = parseInt(result.result, 16)
+        console.log('🔍 Nonce Check:', {
+          walletAddress: account.addresses[0],
+          blockchainNonce,
+          accountStatus: account.status,
+          chainId: account.chainId
+        })
+        return blockchainNonce
+      }
+    } catch (error) {
+      console.error('❌ Error checking nonce:', error)
+    }
+    return null
+  }
+
   // Handlers
   const handleUpdateBtcPubkey = () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
     if (!updateBtcPubkey || !newBtcPubkey) return
+
+    console.log('🔐 Initiating updateBtcPubkey transaction - waiting for wallet signature...')
 
     updateBtcPubkey({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -85,7 +257,13 @@ export default function LenderPage() {
   }
 
   const handleUpdateParameters = () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
     if (!updateParameters) return
+
+    console.log('🔐 Initiating updateParameters transaction - waiting for wallet signature...')
 
     updateParameters({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -101,8 +279,54 @@ export default function LenderPage() {
     })
   }
 
-  const handleExtendLoanOffer = () => {
+  const handleExtendLoanOffer = async () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
     if (!extendLoanOffer) return
+
+    // Check and sync nonce before sending transaction
+    console.log('🔍 Checking nonce before sending transaction...')
+    const blockchainNonce = await checkAndSyncNonce()
+    if (blockchainNonce !== null) {
+      console.log('✅ Nonce synced:', blockchainNonce)
+    } else {
+      console.log('⚠️ Could not verify nonce, proceeding anyway...')
+    }
+
+    console.log('🔐 Initiating extendLoanOffer transaction - waiting for wallet signature...')
+
+    // Calculate the correct total amount to send (loan amount + bond amount)
+    let totalAmountToSend: bigint
+    if (loanDetails && loanDetails.amount) { // loanDetails.amount is the amount field
+      const loanAmount = BigInt(loanDetails.amount)
+      const bondAmount = (loanAmount * BigInt(10)) / BigInt(100) // 10% of loan amount
+      totalAmountToSend = loanAmount + bondAmount // Send loan amount + bond amount
+      console.log('🔍 Extend Loan Offer - Calculated Amounts:', {
+        loanId: selectedLoanId,
+        loanAmount: loanAmount.toString(),
+        loanAmountEth: formatEther(loanAmount),
+        bondAmount: bondAmount.toString(),
+        bondAmountEth: formatEther(bondAmount),
+        totalAmountToSend: totalAmountToSend.toString(),
+        totalAmountToSendEth: formatEther(totalAmountToSend),
+        preimageHashBorrower,
+        preimageHashLender,
+        contractAddress: CONTRACTS.BTC_COLLATERAL_LOAN
+      })
+    } else {
+      // Fallback to hardcoded amount if loan details not available
+      totalAmountToSend = parseEther('0.01')
+      console.log('⚠️ Extend Loan Offer - Using Fallback Amount:', {
+        loanId: selectedLoanId,
+        amountToSend: totalAmountToSend.toString(),
+        amountToSendEth: '0.01 ETH (fallback)',
+        preimageHashBorrower,
+        preimageHashLender,
+        contractAddress: CONTRACTS.BTC_COLLATERAL_LOAN
+      })
+    }
 
     extendLoanOffer({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -113,12 +337,18 @@ export default function LenderPage() {
         preimageHashBorrower,
         preimageHashLender,
       ],
-      value: parseEther('0.01'), // bond amount
+      value: totalAmountToSend, // send loan amount + bond amount
     })
   }
 
   const handleAcceptRepayment = () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
     if (!acceptRepayment) return
+
+    console.log('🔐 Initiating acceptRepayment transaction - waiting for wallet signature...')
 
     acceptRepayment({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -132,7 +362,13 @@ export default function LenderPage() {
   }
 
   const handleMarkAsDefaulted = () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
     if (!markAsDefaulted) return
+
+    console.log('🔐 Initiating markAsDefaulted transaction - waiting for wallet signature...')
 
     markAsDefaulted({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -180,12 +416,29 @@ export default function LenderPage() {
           </div>
 
           {account.status === 'connected' ? (
-            <button
-              onClick={() => disconnect()}
-              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors"
-            >
-              Disconnect
-            </button>
+            <div className="space-y-3">
+              {/* Network Status */}
+              {account.chainId !== NETWORK_CONFIG.ANVIL.chainId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <div className="text-sm text-yellow-800 mb-2">
+                    ⚠️ You are connected to the wrong network. Please switch to Anvil (Chain ID: {NETWORK_CONFIG.ANVIL.chainId})
+                  </div>
+                  <button
+                    onClick={switchToAnvil}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs transition-colors"
+                  >
+                    Add & Switch to Anvil
+                  </button>
+                </div>
+              )}
+              
+              <button
+                onClick={() => disconnect()}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors"
+              >
+                Disconnect
+              </button>
+            </div>
           ) : (
             <div className="space-y-2">
               {connectors.map((connector) => (
@@ -370,13 +623,25 @@ export default function LenderPage() {
               
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Loan ID</label>
-                <input
-                  type="number"
-                  value={selectedLoanId}
-                  onChange={(e) => setSelectedLoanId(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="0"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={selectedLoanId}
+                    onChange={(e) => setSelectedLoanId(e.target.value)}
+                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="0"
+                  />
+                  <button
+                    onClick={() => refetchLoanDetails()}
+                    disabled={!selectedLoanId || selectedLoanId === '0'}
+                    className="px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-gray-500">
+                  Total Loans Available: {totalLoans ? Number(totalLoans) : 0}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -414,6 +679,115 @@ export default function LenderPage() {
                 </div>
               </div>
 
+              {/* Loan Details Display */}
+              {selectedLoanId && selectedLoanId !== '0' && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-3">📋 Loan Details (ID: {selectedLoanId})</h4>
+                  
+                  {loanDetails ? (
+                    <div className="space-y-2 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <div className="font-medium text-blue-700 mb-2">Basic Information</div>
+                          <div className="space-y-1 text-xs text-blue-600">
+                            <div>Borrower Address: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerAddr || 'N/A'}</code></div>
+                            <div>Borrower BTC Pubkey: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerBtcPubkey || 'N/A'}</code></div>
+                            <div>Loan Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.amount ? formatEther(BigInt(loanDetails.amount)) : 'N/A'} ETH</code></div>
+                            <div>Collateral Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.collateralAmount ? formatEther(BigInt(loanDetails.collateralAmount)) : 'N/A'} ETH</code></div>
+                            <div>Bond Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.bondAmount ? formatEther(BigInt(loanDetails.bondAmount)) : 'N/A'} ETH</code></div>
+                            <div>Status: <code className="bg-blue-100 px-1 rounded">{loanDetails.status || 'N/A'}</code></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-blue-700 mb-2">Timelock & Hashes</div>
+                          <div className="space-y-1 text-xs text-blue-600">
+                            <div>Preimage Hash Borrower: <code className="bg-blue-100 px-1 rounded">{loanDetails.preimageHashBorrower || 'N/A'}</code></div>
+                            <div>Preimage Hash Lender: <code className="bg-blue-100 px-1 rounded">{loanDetails.preimageHashLender || 'N/A'}</code></div>
+                            <div>Request Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.requestBlockheight ? Number(loanDetails.requestBlockheight) : 'N/A'}</code></div>
+                            <div>Activation Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.activationBlockheight ? Number(loanDetails.activationBlockheight) : 'N/A'}</code></div>
+                            <div>Repayment Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.repaymentBlockheight ? Number(loanDetails.repaymentBlockheight) : 'N/A'}</code></div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {loanDetails.amount && (
+                        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                          <div className="font-medium text-green-800 mb-2">💰 Amount Calculations</div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-green-700">
+                            <div>
+                              <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} ETH</code></div>
+                              <div className="text-gray-500">({loanDetails.amount} wei)</div>
+                            </div>
+                            <div>
+                              <div>Bond Amount (10%): <code className="bg-green-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code></div>
+                              <div className="text-gray-500">({((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)).toString()} wei)</div>
+                            </div>
+                            <div>
+                              <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code></div>
+                              <div className="text-gray-500">({(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))).toString()} wei)</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-blue-600">
+                      <div>Loading loan details...</div>
+                      <div className="text-xs text-blue-500 mt-1">Make sure you're connected to the correct network and the loan ID exists.</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Contract Constants */}
+              <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <h4 className="font-medium text-purple-800 mb-2">⚙️ Contract Constants</h4>
+                <div className="text-xs text-purple-700 space-y-1">
+                  <div>Contract Address: <code className="bg-purple-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
+                  <div>Network: <code className="bg-purple-100 px-1 rounded">{account.chainId === NETWORK_CONFIG.ANVIL.chainId ? `Anvil (${NETWORK_CONFIG.ANVIL.chainId})` : `Chain ID: ${account.chainId}`}</code></div>
+                  <div>Wallet Connected: <code className="bg-purple-100 px-1 rounded">{account.status === 'connected' ? '✅ Yes' : '❌ No'}</code></div>
+                  <div>Total Loans: <code className="bg-purple-100 px-1 rounded">{totalLoans ? Number(totalLoans) : 'Loading...'}</code></div>
+                  <div>Account Nonce: <code className="bg-purple-100 px-1 rounded">{accountNonce !== null ? accountNonce : 'Click Refresh'}</code></div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const nonce = await checkAndSyncNonce()
+                    if (nonce !== null && nonce !== false) {
+                      setAccountNonce(nonce)
+                      console.log('✅ Nonce refreshed:', nonce)
+                    }
+                  }}
+                  className="mt-2 px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors"
+                >
+                  🔄 Refresh Nonce
+                </button>
+              </div>
+
+              {/* Debug Information */}
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="font-medium text-yellow-800 mb-2">🔍 Debug Information</h4>
+                <div className="text-xs text-yellow-700 space-y-1">
+                  <div>Selected Loan ID: <code className="bg-blue-100 px-1 rounded">{selectedLoanId}</code></div>
+                  <div>Loan Details: {loanDetails ? '✅ Loaded' : '❌ Not loaded'}</div>
+                  {loanDetails && (
+                    <>
+                      <div>Data Type: <code className="bg-yellow-100 px-1 rounded">{typeof loanDetails}</code></div>
+                      <div>Is Array: <code className="bg-yellow-100 px-1 rounded">{Array.isArray(loanDetails) ? 'Yes' : 'No'}</code></div>
+                      <div>Length: <code className="bg-yellow-100 px-1 rounded">{Array.isArray(loanDetails) ? loanDetails.length : 'N/A'}</code></div>
+                      <div>Raw Data: <code className="bg-yellow-100 px-1 rounded text-xs break-all">{serializeLoanDetails(loanDetails)}</code></div>
+                    </>
+                  )}
+                  {loanDetails && loanDetails.amount && (
+                    <>
+                      <div>Loan Amount: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} ETH</code></div>
+                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code> (10%)</div>
+                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)))} ETH</code> (loan + bond)</div>
+                    </>
+                  )}
+                  <div>Contract Address: <code className="bg-blue-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={handleExtendLoanOffer}
@@ -440,6 +814,62 @@ export default function LenderPage() {
             </div>
           </div>
         )}
+
+        {/* Transaction Status Display */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
+          <h2 className="text-xl font-semibold mb-4 text-gray-800">Transaction Status</h2>
+          
+          {/* Current Transaction States */}
+          <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h3 className="font-medium text-gray-800 mb-3">Current Transaction States</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+              <div className={`p-2 rounded border ${offerLoading || isExtendOfferConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="font-medium text-gray-700">Extend Offer</div>
+                <div className="text-xs text-gray-600">
+                  {offerLoading ? 'Signing...' : isExtendOfferConfirming ? 'Mining...' : 'Ready'}
+                </div>
+              </div>
+              <div className={`p-2 rounded border ${acceptRepaymentLoading || isAcceptRepaymentConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="font-medium text-gray-700">Accept Repayment</div>
+                <div className="text-xs text-gray-600">
+                  {acceptRepaymentLoading ? 'Signing...' : isAcceptRepaymentConfirming ? 'Mining...' : 'Ready'}
+                </div>
+              </div>
+              <div className={`p-2 rounded border ${defaultLoading || isMarkAsDefaultedConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="font-medium text-gray-700">Mark Defaulted</div>
+                <div className="text-xs text-gray-600">
+                  {defaultLoading ? 'Signing...' : isMarkAsDefaultedConfirming ? 'Mining...' : 'Ready'}
+                </div>
+              </div>
+              <div className={`p-2 rounded border ${updatePubkeyLoading || isUpdatePubkeyConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="font-medium text-gray-700">Update Pubkey</div>
+                <div className="text-xs text-gray-600">
+                  {updatePubkeyLoading ? 'Signing...' : isUpdatePubkeyConfirming ? 'Mining...' : 'Ready'}
+                </div>
+              </div>
+              <div className={`p-2 rounded border ${updateParamsLoading || isUpdateParamsConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
+                <div className="font-medium text-gray-700">Update Params</div>
+                <div className="text-xs text-gray-600">
+                  {updateParamsLoading ? 'Signing...' : isUpdateParamsConfirming ? 'Mining...' : 'Ready'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Transaction Hashes */}
+          {(extendOfferHash || acceptRepaymentHash || markAsDefaultedHash || updatePubkeyHash || updateParamsHash) && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="font-medium text-blue-800 mb-3">📝 Transaction Hashes</h3>
+              <div className="text-xs text-blue-700 space-y-1">
+                {extendOfferHash && <div>Extend Offer: <code className="bg-blue-100 px-1 rounded">{extendOfferHash}</code></div>}
+                {acceptRepaymentHash && <div>Accept Repayment: <code className="bg-blue-100 px-1 rounded">{acceptRepaymentHash}</code></div>}
+                {markAsDefaultedHash && <div>Mark Defaulted: <code className="bg-blue-100 px-1 rounded">{markAsDefaultedHash}</code></div>}
+                {updatePubkeyHash && <div>Update Pubkey: <code className="bg-blue-100 px-1 rounded">{updatePubkeyHash}</code></div>}
+                {updateParamsHash && <div>Update Params: <code className="bg-blue-100 px-1 rounded">{updateParamsHash}</code></div>}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Instructions */}
         <div className="bg-blue-50 rounded-xl p-6 mt-8">
