@@ -440,7 +440,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Update loan state
         loan.status = LoanStatus.RepaymentInProgress;
-        loan.repaymentBlockheight = block.number;
+        loan.repaymentBlockheight = block.number; //used in claim or refund to compute timelock
 
         emit RepaymentAttempted(loanId, msg.sender, msg.value);
     }
@@ -461,7 +461,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(loan.preimageHashLender == bytes32(0), "Loan: rpmt already accepted");
 
         // Refund from EtherSwap
-        uint256 timelock = block.number + timelockRepaymentAccept;
+        uint256 timelock = loan.repaymentBlockheight + timelockRepaymentAccept;
         etherSwap.refund(loan.preimageHashBorrower, loan.amount, address(this), timelock);
 
         // Update loan state

@@ -138,17 +138,21 @@ Loan Request → Lender Offer → Loan Activation → Repayment → Completion
 ## Contract Architecture
 
 ```
-LoanFactory
-├── EtherSwap (atomic swaps)
-└── BtcCollateralLoan (loan management)
+EtherSwap (atomic swaps)
+BtcCollateralLoan (loan management)
+LoanFactory (only for testing with Forge: deploys both contracts)
 ```
 
 ### Key Contracts
 
-- **LoanFactory.sol**: Factory for deploying loan contracts
 - **EtherSwap.sol**: Modified from Boltz Exchange for atomic swaps
 - **BtcCollateralLoan.sol**: Bitcoin-collateralized loan logic
-- **TransferHelper.sol**: Utility library for token transfers
+
+The main change to EtherSwap is the introduction of `authorized` caller (the Loan contract) to 
+ensure that the core public method calls (`lock`, `claim`, `refund`) can only be 
+called from the BtcCollateralLoan contract. Users (lenders, borrowers) should not be able to
+interact using these methods directly.
+
 
 ### Contract Parameters
 
@@ -197,12 +201,8 @@ The app is configured for testing with:
 - **User 3**: `0x5b0248e30583CeD4F09726C547935552C469EB24`
 - **User 4**: `0xcDbc8abb83E01BaE13ECE8853a5Ca84b2Ef6Ca86`
 
-Example to see the accouts work, a simple send
-```
-cast send --from 0x8995E44a22e303A79bdD2E6e41674fb92d620863 0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e --value 1000000000000000 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --rpc-url http://127.0.0.1:8545
-```
 
-## Helper examples
+## Helper cast examples
 
 ```
 cast call 0x02b8afd8146b7bc6bd4f02782c18bd4649be1605 "LENDER_BOND_PERCENTAGE()" --rpc-url http://127.0.0.1:8545
@@ -231,20 +231,7 @@ cast rpc txpool_inspect --rpc-url http://127.0.0.1:8545
 3. Update `.env.local` with contract addresses
 4. Start development server: `npm run dev`
 
-### Production
 
-1. Update environment variables for target network
-2. Deploy contracts to target chain
-3. Update contract addresses in environment
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Anvil not running**: Make sure anvil is started on port 8545
-2. **Wrong network**: Switch MetaMask to Anvil (Chain ID: 31337)
-3. **Contract not deployed**: Deploy contracts first via Foundry or UI
-4. **Contract size limit**: Some contracts may exceed size limits (warning only)
 
 ### Debug Mode
 
@@ -252,7 +239,6 @@ Enable debug logging by setting:
 ```bash
 NEXT_PUBLIC_DEBUG=true
 ```
-
 
 ## Preimage generation for testing
 There are helper scripts to generate preimages and hashes for borrower and lenders in the `evmchain` directory.
@@ -268,7 +254,4 @@ python3 misc/hasher.py
 MIT License - see LICENSE file for details
 
 ## Acknowledgments
-
-- [Wagmi](https://wagmi.sh/) - React hooks for Ethereum
-- [Foundry](https://getfoundry.sh/) - Ethereum development toolkit
 - [Boltz Exchange](https://github.com/BoltzExchange/boltz-core) - Original EtherSwap implementation
