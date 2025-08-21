@@ -243,7 +243,7 @@ contract EtherSwap {
     /// @param refundAddress Address that locked the Ether in the contract
     /// @param timelock Block height after which the locked Ether can be refunded
     function claim(bytes32 preimage, uint256 amount, address claimAddress, address refundAddress, uint256 timelock)
-        public
+        public onlyAuthorized
     {
         prepareClaim(preimage, amount, claimAddress, refundAddress, timelock);
 
@@ -260,7 +260,7 @@ contract EtherSwap {
     /// @param refundAddress Address that locked the Ether in the contract
     /// @param timelock Block height after which the locked Ether can be refunded
     function refund(bytes32 preimageHash, uint256 amount, address claimAddress, address refundAddress, uint256 timelock)
-        public
+        public onlyAuthorized
     {
         // Make sure the timelock has expired already
         // If the timelock is wrong, so will be the value hash of the swap which results in no swap being found

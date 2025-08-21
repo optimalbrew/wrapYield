@@ -170,8 +170,8 @@ export default function BorrowerPage() {
   const [loanAmount, setLoanAmount] = useState('0.1')
   const [collateralAmount, setCollateralAmount] = useState('0.12')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
-  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678')
-  const [btcAddress, setBtcAddress] = useState('bcrt1pxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlhd4ks9a2l7qj0m9s8n5v')
+  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('1234567890432156789012345678901234567890123456789012345678901234')
+  const [btcAddress, setBtcAddress] = useState('bcrt1pxy2kgdygjrsqtzq2n0yrf1393p83kkfjhx0wlhd4ks9a2l7qj0m9s8n5v')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
   const [preimageBorrower, setPreimageBorrower] = useState<`0x${string}`>('0x05e5cdc502cc641787db0383a01d4b6baec69b62b6dbf9d9d9600872bbbed741')
@@ -283,7 +283,7 @@ export default function BorrowerPage() {
       ],
       // Add explicit gas settings for Anvil
       gas: BigInt(500000), // Set reasonable gas limit
-      gasPrice: BigInt(1000000000), // 1 gwei (very low for Anvil)
+      gasPrice: BigInt(5000000000), // 5 gwei should be enough for Anvil
     })
   }
 

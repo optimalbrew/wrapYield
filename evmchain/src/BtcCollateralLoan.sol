@@ -66,7 +66,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     /// @dev currently unused.
     uint256 public loanInterestRate;
 
-    /// @dev Loan counter
+    /// @dev Loan counter: This is total number of loans requested thus far, not the actual number outstanding or issued
     uint256 private _loanIds;
 
     // ============ ENUMS ============
@@ -179,6 +179,9 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     /**
      * @dev Set the EtherSwap contract address (only lender can call)
      * @param _etherSwapAddress The EtherSwap contract address
+     * this will lock in a specific etherswap version. updates will not be possible.
+     * Todo: production app should allow updates - but be careful about contract storage
+     * perhaps use proxy patterns
      */
     function setEtherSwapAddress(address _etherSwapAddress) external onlyLender {
         require(_etherSwapAddress != address(0), "Loan: inval EtherSwap addr");
@@ -297,7 +300,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         Loan storage loan = loans[loanId];
 
         // Claim repayment from EtherSwap
-        uint256 timelock = block.number + timelockRepaymentAccept;
+        uint256 timelock = loan.repaymentBlockheight + timelockRepaymentAccept;
         etherSwap.claim(preimageLender, loan.amount, address(this), address(this), timelock);
 
         //if above is successful, then the claimed ether is sent to the lender
@@ -305,7 +308,6 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Update loan state
         loan.status = LoanStatus.Repaid;
-        loan.repaymentBlockheight = block.number;
 
         emit RepaymentAccepted(loanId, msg.sender);
     }
@@ -356,7 +358,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(bytes(btcPubkey).length == 64, "Loan: inval BTC pubkey");
         require(borrowerToLoanId[msg.sender] == 0, "Loan: borrower has active loan");
 
-        _loanIds++;
+        _loanIds++; //loan map is 1 indexed, not 0 indexed. but since deletion is allowed, do not treat _loanIds as the total number of loans
         uint256 loanId = _loanIds;
 
         loans[loanId] = Loan({
@@ -394,7 +396,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         require(msg.sender == loan.borrowerAddr, "Loan: caller not borrower");
 
         // Claim loan from EtherSwap
-        uint256 timelock = block.number + timelockLoanReq;
+        uint256 timelock = loan.offerBlockheight + timelockLoanReq;
         etherSwap.claim(
             preimageBorrower, //this allows lender to commit btc to collateral address (using pre-signed btc tx)
             loan.amount,
@@ -438,6 +440,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Update loan state
         loan.status = LoanStatus.RepaymentInProgress;
+        loan.repaymentBlockheight = block.number;
 
         emit RepaymentAttempted(loanId, msg.sender, msg.value);
     }

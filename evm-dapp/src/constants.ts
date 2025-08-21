@@ -22,7 +22,7 @@ export const account3 = privateKeyToAccount(privateKey3)
 export const account4 = privateKeyToAccount(privateKey4)
 export const account5 = privateKeyToAccount(privateKey5)
 
-// Account addresses: should not be really needed here, should be in the contract storage
+// Account addresses: should not be really needed here, on-chain data.
 export const ACCOUNTS = {
   LENDER: '0x8995E44a22e303A79bdD2E6e41674fb92d620863',
   BORROWER1: '0xE9e05C9f02e10FA833D379CB1c7aC3a3f23B247e',
@@ -40,8 +40,8 @@ export const CONTRACT_CONFIG = {
   TIMELOCK_BTC_COLLATERAL: 250, // t_1: 250 blocks (must be > t_L)
 } as const
 
-// Bitcoin public key placeholder (64 characters - 32 bytes)
-export const BTC_PUBKEY_PLACEHOLDER = '0x12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678'
+// Bitcoin public key placeholder: x_only pubkey (64 characters length - 32 bytes)
+export const BTC_PUBKEY_PLACEHOLDER = '0x1234567890123456789012345678901234567890123456789012345678901234'
 
 // Network configuration
 export const NETWORK_CONFIG = {

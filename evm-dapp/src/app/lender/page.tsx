@@ -113,10 +113,11 @@ export default function LenderPage() {
 
 
   // Form state
-  const [newBtcPubkey, setNewBtcPubkey] = useState('')
+  const [newBtcPubkey, setNewBtcPubkey] = useState('1234567890123456789012345678901234567890123456789012345678901234')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
-  const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x1234567890123456789012345678901234567890123456789012345678901234')
-  const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
+  const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
+  const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
+  const [preimageLender, setPreimageLender] = useState<`0x${string}`>('0x38f9fa6b463f6e37f2cf7286f1f3bbf2e1fe33296f95629d9c343511f9bd35d5')
   const [newLoanDuration, setNewLoanDuration] = useState('1000')
   const [newTimelockLoanReq, setNewTimelockLoanReq] = useState('100')
   const [newTimelockBtcEscrow, setNewTimelockBtcEscrow] = useState('200')
@@ -348,7 +349,15 @@ export default function LenderPage() {
 
     if (!acceptRepayment) return
 
+    // Validate that preimageLender is provided
+    if (!preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+      alert('❌ Error: Please provide the Lender Preimage to accept repayment. This is the actual secret value, not the hash.')
+      return
+    }
+
     console.log('🔐 Initiating acceptRepayment transaction - waiting for wallet signature...')
+    console.log('📋 Selected Loan ID:', selectedLoanId)
+    console.log('🔑 Preimage Lender:', preimageLender)
 
     acceptRepayment({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -356,7 +365,7 @@ export default function LenderPage() {
       functionName: 'acceptLoanRepayment',
       args: [
         BigInt(selectedLoanId),
-        preimageHashLender,
+        preimageLender, // Use actual preimage, not preimage hash
       ],
     })
   }
@@ -539,7 +548,7 @@ export default function LenderPage() {
                   value={newBtcPubkey}
                   onChange={(e) => setNewBtcPubkey(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567"
+                  placeholder="Enter 64-character BTC public key..."
                   maxLength={64}
                 />
                 <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
@@ -677,6 +686,28 @@ export default function LenderPage() {
                   />
                   <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 hex characters</p>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lender Preimage 
+                    <span className="text-red-500 ml-1">*</span>
+                    <span className="text-xs text-gray-500 ml-2">(Required for Accept Repayment)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={preimageLender}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      if (value.startsWith('0x') && value.length === 66) {
+                        setPreimageLender(value as `0x${string}`)
+                      }
+                    }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    placeholder="0x... (actual preimage, not hash)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    <strong>Important:</strong> This is the actual preimage (secret), not the hash. Required to accept loan repayments.
+                  </p>
+                </div>
               </div>
 
               {/* Loan Details Display */}
@@ -798,8 +829,9 @@ export default function LenderPage() {
                 </button>
                 <button
                   onClick={handleAcceptRepayment}
-                  disabled={acceptRepaymentLoading}
+                  disabled={acceptRepaymentLoading || !preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000'}
                   className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
+                  title={!preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000' ? 'Please provide the Lender Preimage to accept repayment' : ''}
                 >
                   {acceptRepaymentLoading ? 'Accepting...' : 'Accept Repayment'}
                 </button>
