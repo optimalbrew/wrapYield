@@ -71,10 +71,10 @@ contract ProtocolConfigTest is Test {
         uint256 btcCollateral = ProtocolConfig.getTimelockBtcCollateral();
         uint256 loanDuration = ProtocolConfig.getLoanDuration();
         
-        assertEq(loanReq, 100);
-        assertEq(btcEscrow, 200);
-        assertEq(repaymentAccept, 150);
-        assertEq(btcCollateral, 250);
+        assertEq(loanReq, 1000);
+        assertEq(btcEscrow, 2000);
+        assertEq(repaymentAccept, 1500);
+        assertEq(btcCollateral, 543000);
         assertEq(loanDuration, 540000);
         
         console.log("Timelock loan request (t_B):", loanReq);
@@ -91,7 +91,7 @@ contract ProtocolConfigTest is Test {
         uint256 bpsDivisor = ProtocolConfig.getBasisPointsDivisor();
         
         assertEq(defaultRate, 800);  // 8% = 800 basis points
-        assertEq(minRate, 100);      // 1% = 100 basis points
+        assertEq(minRate, 0);      // 0% = 100 basis points
         assertEq(maxRate, 2500);     // 25% = 2500 basis points
         assertEq(bpsDivisor, 10000); // 100% = 10000 basis points
         
@@ -177,7 +177,7 @@ contract ProtocolConfigTest is Test {
         // Test interest rate validation
         assertTrue(ProtocolConfig.validateInterestRate(500));  // 5% - valid
         assertTrue(ProtocolConfig.validateInterestRate(800));  // 8% - valid
-        assertFalse(ProtocolConfig.validateInterestRate(50));  // 0.5% - too small
+        //assertFalse(ProtocolConfig.validateInterestRate(50));  // 0.5% - too small
         assertFalse(ProtocolConfig.validateInterestRate(3000)); // 30% - too large
         
         console.log("Timelock ordering valid:", ProtocolConfig.validateTimelockOrdering());
@@ -269,10 +269,10 @@ contract ProtocolConfigTest is Test {
         uint256 t_0 = ProtocolConfig.getTimelockBtcEscrow();
         uint256 t_L = ProtocolConfig.getTimelockRepaymentAccept();
         uint256 t_1 = ProtocolConfig.getTimelockBtcCollateral();
-        
+        uint256 t_D = ProtocolConfig.getLoanDuration();
         // From contract: t_0 must > t_B and t_1 must > t_L
         assertTrue(t_0 > t_B, "t_0 must be greater than t_B");
-        assertTrue(t_1 > t_L, "t_1 must be greater than t_L");
+        assertTrue(t_1 > t_L + t_D, "t_1 must be greater than t_L + t_D");
         
         console.log("All timelock constraints satisfied");
         console.log("t_0 value:", t_0);
@@ -281,5 +281,7 @@ contract ProtocolConfigTest is Test {
         console.log("t_1 value:", t_1);
         console.log("t_L value:", t_L);
         console.log("t_1 > t_L:", t_1 > t_L);
+        console.log("t_D value:", t_D);
+        console.log("t_1 > t_L + t_D:", t_1 > t_L + t_D);
     }
 }

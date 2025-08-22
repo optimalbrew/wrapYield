@@ -94,16 +94,16 @@ library ProtocolConfig {{
     // ============ TIMELOCK CONSTANTS (in blocks) ============
     
     /// @dev {timelocks.get('loanRequest', {}).get('symbol', 't_B')}: {timelocks.get('loanRequest', {}).get('description', '')} ({timelocks.get('loanRequest', {}).get('blocks', 100)} blocks)
-    uint256 internal constant TIMELOCK_LOAN_REQ = {timelocks.get('loanRequest', {}).get('blocks', 100)};
+    uint256 internal constant TIMELOCK_LOAN_REQ = {timelocks.get('loanRequest', {}).get('blocks', 1000)};
     
     /// @dev {timelocks.get('btcEscrow', {}).get('symbol', 't_0')}: {timelocks.get('btcEscrow', {}).get('description', '')} ({timelocks.get('btcEscrow', {}).get('blocks', 200)} blocks)
-    uint256 internal constant TIMELOCK_BTC_ESCROW = {timelocks.get('btcEscrow', {}).get('blocks', 200)};
+    uint256 internal constant TIMELOCK_BTC_ESCROW = {timelocks.get('btcEscrow', {}).get('blocks', 2000)};
     
-    /// @dev {timelocks.get('repaymentAccept', {}).get('symbol', 't_L')}: {timelocks.get('repaymentAccept', {}).get('description', '')} ({timelocks.get('repaymentAccept', {}).get('blocks', 150)} blocks)
-    uint256 internal constant TIMELOCK_REPAYMENT_ACCEPT = {timelocks.get('repaymentAccept', {}).get('blocks', 150)};
+    /// @dev {timelocks.get('repaymentAccept', {}).get('symbol', 't_L')}: {timelocks.get('repaymentAccept', {}).get('description', '')} ({timelocks.get('repaymentAccept', {}).get('blocks', 1500)} blocks)
+    uint256 internal constant TIMELOCK_REPAYMENT_ACCEPT = {timelocks.get('repaymentAccept', {}).get('blocks', 1500)};
     
     /// @dev {timelocks.get('btcCollateral', {}).get('symbol', 't_1')}: {timelocks.get('btcCollateral', {}).get('description', '')} ({timelocks.get('btcCollateral', {}).get('blocks', 250)} blocks)
-    uint256 internal constant TIMELOCK_BTC_COLLATERAL = {timelocks.get('btcCollateral', {}).get('blocks', 250)};
+    uint256 internal constant TIMELOCK_BTC_COLLATERAL = {timelocks.get('btcCollateral', {}).get('blocks', 2500)};
     
     /// @dev {timelocks.get('loanDuration', {}).get('symbol', 't_D')}: {timelocks.get('loanDuration', {}).get('description', '')} ({timelocks.get('loanDuration', {}).get('blocks', 540000)} blocks)
     uint256 internal constant LOAN_DURATION = {timelocks.get('loanDuration', {}).get('blocks', 540000)};
@@ -330,7 +330,7 @@ library ProtocolConfig {{
      */
     function validateTimelockOrdering() internal pure returns (bool) {{
         return TIMELOCK_BTC_ESCROW > TIMELOCK_LOAN_REQ && 
-               TIMELOCK_BTC_COLLATERAL > TIMELOCK_REPAYMENT_ACCEPT;
+               TIMELOCK_BTC_COLLATERAL > (TIMELOCK_REPAYMENT_ACCEPT + LOAN_DURATION);
     }}
     
     /**

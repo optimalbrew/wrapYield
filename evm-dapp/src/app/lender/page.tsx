@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { BTC_COLLATERAL_LOAN_ABI, CONTRACTS } from '@/contracts'
-import { NETWORK_CONFIG } from '@/constants'
+import { CONTRACT_CONFIG, NETWORK_CONFIG } from '@/constants'
 import Link from 'next/link'
 import { useWalletValidation } from '@/hooks/useWalletValidation'
 import { switchToAnvil } from '@/utils/networkUtils'
@@ -118,11 +118,11 @@ export default function LenderPage() {
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
   const [preimageLender, setPreimageLender] = useState<`0x${string}`>('0x38f9fa6b463f6e37f2cf7286f1f3bbf2e1fe33296f95629d9c343511f9bd35d5')
-  const [newLoanDuration, setNewLoanDuration] = useState('1000')
-  const [newTimelockLoanReq, setNewTimelockLoanReq] = useState('100')
-  const [newTimelockBtcEscrow, setNewTimelockBtcEscrow] = useState('200')
-  const [newTimelockRepaymentAccept, setNewTimelockRepaymentAccept] = useState('150')
-  const [newTimelockBtcCollateral, setNewTimelockBtcCollateral] = useState('250')
+  const [newLoanDuration, setNewLoanDuration] = useState(CONTRACT_CONFIG.LOAN_DURATION.toString())
+  const [newTimelockLoanReq, setNewTimelockLoanReq] = useState(CONTRACT_CONFIG.TIMELOCK_LOAN_REQ.toString())
+  const [newTimelockBtcEscrow, setNewTimelockBtcEscrow] = useState(CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW.toString())
+  const [newTimelockRepaymentAccept, setNewTimelockRepaymentAccept] = useState(CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT.toString())
+  const [newTimelockBtcCollateral, setNewTimelockBtcCollateral] = useState(CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL.toString())
 
   // Get loan details for bond calculation
   const { data: loanDetails, refetch: refetchLoanDetails } = useReadContract({
@@ -143,8 +143,8 @@ export default function LenderPage() {
       console.log('Transaction Details:', {
         function: 'extendLoanOffer',
         loanId: selectedLoanId,
-        bondAmount: loanDetails && loanDetails.amount ? formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)) + ' ETH' : '0.01 ETH (fallback)',
-        amountToSend: loanDetails && loanDetails.amount ? formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))) + ' ETH' : '0.01 ETH (fallback)',
+        bondAmount: loanDetails && loanDetails.amount ? formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)) + ' ETH' : '0.01 ETH (fallback)',
+        amountToSend: loanDetails && loanDetails.amount ? formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))) + ' ETH' : '0.01 ETH (fallback)',
         hash: extendOfferHash
       })
     }
@@ -302,7 +302,7 @@ export default function LenderPage() {
     let totalAmountToSend: bigint
     if (loanDetails && loanDetails.amount) { // loanDetails.amount is the amount field
       const loanAmount = BigInt(loanDetails.amount)
-      const bondAmount = (loanAmount * BigInt(10)) / BigInt(100) // 10% of loan amount
+      const bondAmount = (loanAmount * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100) // 10% of loan amount
       totalAmountToSend = loanAmount + bondAmount // Send loan amount + bond amount
       console.log('🔍 Extend Loan Offer - Calculated Amounts:', {
         loanId: selectedLoanId,
@@ -573,7 +573,7 @@ export default function LenderPage() {
                     value={newLoanDuration}
                     onChange={(e) => setNewLoanDuration(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="1000"
+                    placeholder={CONTRACT_CONFIG.LOAN_DURATION.toString()}
                   />
                 </div>
                 <div>
@@ -583,7 +583,7 @@ export default function LenderPage() {
                     value={newTimelockLoanReq}
                     onChange={(e) => setNewTimelockLoanReq(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="100"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_LOAN_REQ.toString()}
                   />
                 </div>
                 <div>
@@ -593,7 +593,7 @@ export default function LenderPage() {
                     value={newTimelockBtcEscrow}
                     onChange={(e) => setNewTimelockBtcEscrow(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="200"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW.toString()}
                   />
                 </div>
                 <div>
@@ -603,7 +603,7 @@ export default function LenderPage() {
                     value={newTimelockRepaymentAccept}
                     onChange={(e) => setNewTimelockRepaymentAccept(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="150"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT.toString()}
                   />
                 </div>
                 <div>
@@ -613,7 +613,7 @@ export default function LenderPage() {
                     value={newTimelockBtcCollateral}
                     onChange={(e) => setNewTimelockBtcCollateral(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="250"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL.toString()}
                   />
                 </div>
               </div>
@@ -750,12 +750,12 @@ export default function LenderPage() {
                               <div className="text-gray-500">({loanDetails.amount} wei)</div>
                             </div>
                             <div>
-                              <div>Bond Amount (10%): <code className="bg-green-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code></div>
-                              <div className="text-gray-500">({((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)).toString()} wei)</div>
+                              <div>Bond Amount (10%): <code className="bg-green-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code></div>
+                              <div className="text-gray-500">({((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)).toString()} wei)</div>
                             </div>
                             <div>
-                              <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code></div>
-                              <div className="text-gray-500">({(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))).toString()} wei)</div>
+                              <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code></div>
+                              <div className="text-gray-500">({(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))).toString()} wei)</div>
                             </div>
                           </div>
                         </div>
@@ -811,8 +811,8 @@ export default function LenderPage() {
                   {loanDetails && loanDetails.amount && (
                     <>
                       <div>Loan Amount: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} ETH</code></div>
-                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100))} ETH</code> (10%)</div>
-                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(10)) / BigInt(100)))} ETH</code> (loan + bond)</div>
+                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code> (10%)</div>
+                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)))} ETH</code> (loan + bond)</div>
                     </>
                   )}
                   <div>Contract Address: <code className="bg-blue-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>

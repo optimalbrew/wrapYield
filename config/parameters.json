@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
   "description": "Shared configuration parameters for BTC Yield Protocol",
-  "lastUpdated": "2024-12-19",
+  "lastUpdated": "2025-Aug-21",
   
   "fees": {
     "processingFee": {
@@ -12,7 +12,7 @@
     "originationFee": {
       "percentage": 1,
       "divisor": 1000,
-      "description": "1% origination fee for activated loans"
+      "description": "1% origination fee for activated loans (in bitcoin)"
     },
     "lenderBondPercentage": {
       "percentage": 10,
@@ -34,26 +34,26 @@
   },
   
   "timelocks": {
-    "description": "All timelock values are in blocks. For Bitcoin, multiply by conversionRatio",
+    "description": "All timelock values are in Rootstock/EVM blocks. For Bitcoin, multiply by conversionRatio",
     "loanRequest": {
-      "blocks": 100,
+      "blocks": 1000,
       "symbol": "t_B",
-      "description": "Timelock for loan request acceptance (shorter than t_0)"
+      "description": "Timelock for loan request acceptance by Borrower, after which lender can take it back"
     },
     "btcEscrow": {
-      "blocks": 200,
+      "blocks": 2000,
       "symbol": "t_0", 
-      "description": "Timelock for BTC escrow (enforced on Bitcoin side, must be > t_B)"
+      "description": "Timelock in EVM blocks for BTC escrow (enforced on Bitcoin side, must be > t_B)"
     },
     "repaymentAccept": {
-      "blocks": 150,
+      "blocks": 1500,
       "symbol": "t_L",
       "description": "Timelock for repayment acceptance"
     },
     "btcCollateral": {
-      "blocks": 250,
+      "blocks": 543000,
       "symbol": "t_1",
-      "description": "Timelock for BTC collateral release (must be > t_L, enforced on Bitcoin side)"
+      "description": "Timelock in EVM blocks for BTC collateral release (must be > t_L + t_D, enforced on Bitcoin side)"
     },
     "loanDuration": {
       "blocks": 540000,
@@ -68,7 +68,7 @@
       "description": "Default annual interest rate"
     },
     "minimum": {
-      "annualPercentage": 1.0,
+      "annualPercentage": 0.0,
       "description": "Minimum allowed interest rate"
     },
     "maximum": {

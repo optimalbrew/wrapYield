@@ -10,7 +10,7 @@ from bitcoinutils.transactions import Transaction, TxInput, TxOutput, TxWitnessI
 from bitcoinutils.utils import to_satoshis, ControlBlock
 from bitcoinutils.constants import TYPE_RELATIVE_TIMELOCK
 import hashlib
-
+from config.python_config import get_timelock, get_interest_rate
 
 def test_get_nums_key():
     key = get_nums_key()
@@ -29,15 +29,22 @@ def test_test_keys(test_keys):
     assert test_keys['borrower_priv'] is not None
     assert test_keys['lender_priv'] is not None
 
-def test_get_leaf_scripts_output_0(test_keys):
+def test_get_timelock_and_interest_rate(test_data):
+    """Test that get_timelock works correctly."""
+    assert get_timelock('loanDuration', for_bitcoin=True) == test_data['test_duration']
+    assert get_timelock('btcEscrow', for_bitcoin=True) == test_data['borrower_timelock']
+    assert get_timelock('btcCollateral', for_bitcoin=True) == test_data['lender_timelock']
+    assert get_interest_rate('default') == test_data['test_interest_rate']
+
+def test_get_leaf_scripts_output_0(test_keys, test_data):
     """Test that get_leaf_scripts_output_0 fails with invalid preimage hash."""
     with pytest.raises(AssertionError):
-        get_leaf_scripts_output_0(test_keys['borrower_pub'], test_keys['lender_pub'], "invalid_hash")
+        get_leaf_scripts_output_0(test_keys['borrower_pub'], test_keys['lender_pub'], "invalid_hash", test_data['borrower_timelock'])
 
-def test_get_leaf_scripts_output_1(test_keys):
+def test_get_leaf_scripts_output_1(test_keys, test_data):
     """Test that get_leaf_scripts_output_1 fails with invalid preimage hash."""
     with pytest.raises(AssertionError):
-        get_leaf_scripts_output_1(test_keys['borrower_pub'], test_keys['lender_pub'], "invalid_hash")
+        get_leaf_scripts_output_1(test_keys['borrower_pub'], test_keys['lender_pub'], "invalid_hash", test_data['lender_timelock'])
 
 def test_get_nums_p2tr_addr_0(test_keys, test_data):
     """Test that get_nums_p2tr_addr_0 works correctly by sending funds to the address and checking the balance."""
@@ -53,7 +60,7 @@ def test_get_nums_p2tr_addr_1(test_keys, test_data):
     get_nums_p2tr_addr_1(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_lender'], test_data['lender_timelock'])
     #print(get_nums_p2tr_addr_1(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_lender']).to_string())
     #'bcrt1pkasqflhh3yrkf770c0pet5uxsdespq8vvqsvymfu2w5fvlj3cg4s24v2ne'
-    assert get_nums_p2tr_addr_1(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_lender']) is not None
+    assert get_nums_p2tr_addr_1(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_lender'], test_data['lender_timelock']) is not None
 
 
 def test_send_funds_to_addr_0(test_keys, test_data, bitcoin_setup):
@@ -158,7 +165,7 @@ def test_spend_escrow_to_exit(test_keys, test_data, bitcoin_setup):
         borrower_pub=test_keys['borrower_pub'], 
         lender_pub=test_keys['lender_pub'], 
         preimage_hash_lender=test_data['preimage_hash_lender'], 
-        lender_timelock=144*180, 
+        lender_timelock=test_data['lender_timelock'], 
         txid=txid, vout=vout, orig_fee=0.01, collateral_amount=0.49
         )
     
@@ -252,6 +259,8 @@ def test_return_collateral_to_borrower(test_keys, test_data, bitcoin_setup):
     txid = proxy.sendrawtransaction(tx.serialize())
     assert txid is not None
 
+#@pytest.mark.timeout(30) #pytest tests/test_utils.py::test_release_collateral_to_lender --timeout=0 # for no timeout
+# this will fail if lender_timelock is too long (e.g. 543000 blocks), set it much lower e.g. 100 in conftest.py to test, or use --timeout=0 to run without timeout
 def test_release_collateral_to_lender(test_keys, test_data, bitcoin_setup):
     """Witness constuction for lender to capture collateral after timelock"""
     collateral_address = get_nums_p2tr_addr_1(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_lender'], test_data['lender_timelock'])

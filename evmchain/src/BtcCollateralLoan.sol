@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import "./EtherSwap.sol";
+import "./ProtocolConfig.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -34,16 +35,16 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     string public lenderBtcPubkey;
 
     /// @dev Contract parameters
-    uint256 public constant PROCESSING_FEE = 0.001 ether;
+    uint256 public constant PROCESSING_FEE = ProtocolConfig.PROCESSING_FEE;
     /// rBTC (about $100) refundable processing fee (spam prevention)
-    uint256 public constant MIN_LOAN_AMOUNT = 0.005 ether;
+    uint256 public constant MIN_LOAN_AMOUNT = ProtocolConfig.MIN_LOAN_AMOUNT;
     /// rBTC (about $500) Minimum loan amount
 
     /// 1% Origin fee for activated loan, used on bitcoin side
-    uint256 public constant ORIGIN_FEE_PERCENTAGE_DIVISOR = 1000;
+    uint256 public constant ORIGIN_FEE_PERCENTAGE_DIVISOR = ProtocolConfig.ORIGIN_FEE_PERCENTAGE_DIVISOR;
 
     /// 10% lender bond percentage
-    uint256 public constant LENDER_BOND_PERCENTAGE = 10;
+    uint256 public constant LENDER_BOND_PERCENTAGE = ProtocolConfig.LENDER_BOND_PERCENTAGE;
 
     /// Lender bond percentage (10% of loan amount)
 
@@ -58,13 +59,13 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     uint256 public timelockRepaymentAccept; // t_L // enforced on the evm side
     
     //this can safely be very large. Also needs to be converted to bitcoin blocks using a ratio e.g. 1:20
-    uint256 public timelockBtcCollateral; // t_1 (longer than t_L) // enforced on the bitcoin side, not used here
+    uint256 public timelockBtcCollateral; // t_1 (longer than t_L + t_D) // enforced on the bitcoin side, not used here
 
     /// @dev Duration starts once loan is activated. e.g. 3000*180 blocks (6 months on rootstock)
     uint256 public loanDuration; //t_D, needs to be earlier than t_1 (which is when BTC collateral is released to lender)
   
     /// @dev currently unused.
-    uint256 public loanInterestRate;
+    uint256 public loanInterestRate = ProtocolConfig.DEFAULT_INTEREST_RATE_BPS;
 
     /// @dev Loan counter: This is total number of loans requested thus far, not the actual number outstanding or issued
     uint256 private _loanIds;
@@ -245,7 +246,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         uint256 bondAmount = (loan.amount * LENDER_BOND_PERCENTAGE) / 100;
         require(msg.value == loan.amount + bondAmount, "Loan: incorrect value sent");
 
-        // Lock the loan amount in EtherSwap
+        // Start the acceptance clock and lock loan amount in EtherSwap
         uint256 timelock = block.number + timelockLoanReq;
         etherSwap.lock{value: loan.amount}(preimageHashBorrower, address(this), timelock);
 
@@ -276,7 +277,9 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         Loan storage loan = loans[loanId];
 
         // Refund from EtherSwap
-        uint256 timelock = block.number + timelockLoanReq;
+        uint256 timelock = loan.offerBlockheight + timelockLoanReq;
+        //ensure timelock has passed
+        require(block.number > timelock, "Loan: t_B not passed");
         etherSwap.refund(loan.preimageHashBorrower, loan.amount, address(this), timelock);
 
         // Update loan state
@@ -397,6 +400,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Claim loan from EtherSwap
         uint256 timelock = loan.offerBlockheight + timelockLoanReq;
+        require(block.number < timelock, "Loan: t_B expired");
         etherSwap.claim(
             preimageBorrower, //this allows lender to commit btc to collateral address (using pre-signed btc tx)
             loan.amount,
@@ -462,6 +466,8 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
         // Refund from EtherSwap
         uint256 timelock = loan.repaymentBlockheight + timelockRepaymentAccept;
+        // lender can still accept repayment. We give borrower the option to wait until timelock on bitcoin is about to expire.
+        require(block.number > timelock, "Loan: t_L not passed");
         etherSwap.refund(loan.preimageHashBorrower, loan.amount, address(this), timelock);
 
         // Update loan state

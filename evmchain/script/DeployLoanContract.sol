@@ -5,6 +5,7 @@ pragma solidity ^0.8.30;
 
 import "../lib/forge-std/src/Script.sol";
 import "../src/EtherSwap.sol";
+import "../src/ProtocolConfig.sol";
 import "../src/BtcCollateralLoan.sol";
 
 contract DeployScript is Script {
@@ -18,11 +19,11 @@ contract DeployScript is Script {
         //deploy btc collateral loan
         BtcCollateralLoan loan = new BtcCollateralLoan(
             lenderBtcPubkey,
-            3000*180,
-            100,
-            200,
-            150,
-            250
+            ProtocolConfig.LOAN_DURATION,
+            ProtocolConfig.TIMELOCK_LOAN_REQ,
+            ProtocolConfig.TIMELOCK_BTC_ESCROW,
+            ProtocolConfig.TIMELOCK_REPAYMENT_ACCEPT,
+            ProtocolConfig.TIMELOCK_BTC_COLLATERAL
         );
         console.log("Deployed BtcCollateralLoan: ", address(loan));
         

@@ -8,12 +8,13 @@ from bitcoinutils.setup import setup
 from bitcoinutils.proxy import NodeProxy
 from bitcoinutils.keys import PrivateKey, PublicKey
 from vaultero.setup_utils import local_setup
-
+import sys
 import os
-import shutil
-import subprocess
-from pathlib import Path
+# Add project root to Python path to access config package
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+from config.python_config import get_timelock, get_interest_rate
 
+from pathlib import Path
 import hashlib
 
 @pytest.fixture(scope="session")
@@ -52,16 +53,17 @@ def test_keys():
 @pytest.fixture(scope="session")
 def test_data():
     """Common test data that can be used across all test files.
-    
+    This uses the dataclass in config/python_config.py to get the timelocks and convert them to bitcoin blocks.
     Add any other session-wide test data here.
+
     """
     return {
-        'test_amount': 0.001,  # BTC
-        'test_interest_rate': 5.0,  # percentage
-        'test_duration': 18,  # blocks
-        'borrower_timelock': 10, # should be 144+ blocks
-        'lender_timelock': 20, # should be 144*180+ blocks (but test is faster)
-        'test_origination_fee': 1000,  # satoshis
+        'test_amount': 0.001,  # BTC in application, should be from the dapp
+        'test_interest_rate': get_interest_rate('default'),  # percentage, not used yet.
+        'test_duration': get_timelock('loanDuration', for_bitcoin=True),  # not needed. already "included" in lender_timelock
+        'borrower_timelock': get_timelock('btcEscrow', for_bitcoin=True), # 
+        'lender_timelock': get_timelock('btcCollateral', for_bitcoin=True), # set this to something smaller e.g. 100 for testing, increase timeout
+        'test_origination_fee': 1000,  # satoshis in application, should be from the dapp
         'preimage_borrower': "hello_from_borrower",
         'preimage_lender': "hello_from_lender",
         'preimage_hash_borrower': hashlib.sha256("hello_from_borrower".encode()).hexdigest(),

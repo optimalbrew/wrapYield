@@ -25,13 +25,12 @@ def get_nums_key():
     return PublicKey.from_hex(nums_hex)
 
 #replace alice with borrower, bob with lender
-def get_leaf_scripts_output_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int = 144):
+def get_leaf_scripts_output_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int ):
     """
     Returns the leaf scripts for the output_0.
     This is the escrow output with two spending paths:
     - one is a multisig + hashlock
     - another is siglock + timelock
-    Default timelock is 144 blocks (1 day)
     """
     
     #assert that the preimage hash is a valid sha256 hash
@@ -65,13 +64,12 @@ def get_leaf_scripts_output_0(borrower_pub: PublicKey, lender_pub: PublicKey, pr
     ])
     return [csv_script_borrower, hashlock_and_multisig_script]
 
-def get_leaf_scripts_output_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_lender: str, lender_timelock: int = 144*180):
+def get_leaf_scripts_output_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_lender: str, lender_timelock: int):
     """
     Returns the leaf scripts for the output_1.
     This is the collateral output and it can be spent two ways depending on the loan status:
     1. On default, lender can spend it after a timelock
     2. On repayment, borrower can spend it using the preimage hash of the lender (from EVM chain repayment HTLC)
-    Default timelock is 180 days
     """
 
     assert len(preimage_hash_lender) == 64, "Preimage hash must be a 64-character SHA256 hash"
@@ -98,13 +96,12 @@ def get_leaf_scripts_output_1(borrower_pub: PublicKey, lender_pub: PublicKey, pr
     ])
     return [csv_script_lender, hashlock_and_borrower_siglock_script]
 
-def get_nums_p2tr_addr_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int = 144):
+def get_nums_p2tr_addr_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int):
     """
     Returns the NUMS P2TR address for the output_0.
     This is the escrow output with two spending paths:
     - one is a multisig + hashlock
     - another is borrower with timelock
-    Default timelock is 144 blocks (1 day)
     """
     scripts = get_leaf_scripts_output_0(borrower_pub, lender_pub, preimage_hash_borrower, borrower_timelock)
     # csv_borrower, hashlock_and_multisig_script
@@ -116,13 +113,12 @@ def get_nums_p2tr_addr_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimag
     return taproot_address
 
 
-def get_nums_p2tr_addr_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_lender: str, lender_timelock: int = 180*144):
+def get_nums_p2tr_addr_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_lender: str, lender_timelock: int):
     """
     Returns the NUMS P2TR address for the output_1.
     This is the collateral output and it can be spent two ways depending on loan status:
     1. On default, lender can spend it after a timelock
     2. On repayment, borrower can spend it using the preimage hash of the lender (from EVM chain repayment HTLC)
-    Default timelock is 180 days
     """
     scripts = get_leaf_scripts_output_1(borrower_pub, lender_pub, preimage_hash_lender, lender_timelock)
     # csv_lender, hashlock_and_borrower_siglock_script
@@ -135,7 +131,7 @@ def get_nums_p2tr_addr_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimag
 
 ############### Transaction generation ###############
 
-def dummy_create_escrow_output(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int = 144):
+def dummy_create_escrow_output(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int):
     """
     Dummy method. Does NOT create the escrow output. The borrower (or anyone on their behalf)
     simply needs to compute the p2tr address and send funds to it.
@@ -150,7 +146,7 @@ def create_collateral_lock_tx(
         proxy: NodeProxy,
         borrower_pub: PublicKey, lender_pub: PublicKey, 
         preimage_hash_lender: str, 
-        lender_timelock: int = 144*180, 
+        lender_timelock: int, 
         txid: str='', vout: int=0,
         orig_fee: float = 0.01, #loan origination fee
         collateral_amount: float = 0.49

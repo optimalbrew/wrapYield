@@ -208,6 +208,30 @@ class Config:
             return timelock.to_bitcoin_blocks(self.btc_to_evm_ratio)
         return timelock.blocks
     
+    def get_interest_rate(self, interest_rate_name: str) -> Decimal:
+        """
+        Get interest rate value in percentage
+        
+        Args:
+            interest_rate_name: Name of the interest rate ('default', 'minimum', 'maximum')
+        
+        Returns:
+            Interest rate as Decimal
+        """
+        interest_rate_attr_map = {
+            'default': 'default_interest_rate',
+            'minimum': 'min_interest_rate',
+            'maximum': 'max_interest_rate'
+        }
+        
+        attr_name = interest_rate_attr_map.get(interest_rate_name)
+        if not attr_name:
+            raise ValueError(f"Unknown interest rate: {interest_rate_name}")
+            
+        interest_rate = getattr(self, attr_name)
+        
+        return interest_rate.annual_percentage
+
     def get_fee_amount(self, fee_type: str, amount: Union[float, Decimal, str]) -> Decimal:
         """
         Calculate fee amount based on type and principal amount
@@ -276,6 +300,10 @@ def get_config() -> Config:
 def get_timelock(timelock_name: str, for_bitcoin: bool = False) -> int:
     """Get timelock value. Convenience function."""
     return get_config().get_timelock(timelock_name, for_bitcoin)
+
+def get_interest_rate(interest_rate_name: str) -> Decimal:
+    """Get interest rate value. Convenience function."""
+    return get_config().get_interest_rate(interest_rate_name)
 
 def get_fee(fee_type: str, amount: Union[float, str] = 1.0) -> Decimal:
     """Calculate fee amount. Convenience function.""" 

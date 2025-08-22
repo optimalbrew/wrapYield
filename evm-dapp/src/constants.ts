@@ -1,4 +1,5 @@
 import { privateKeyToAccount } from 'viem/accounts'
+import { getTimelock, getFee } from '../../config/typescript_config'
 
 // Helper function to ensure private key has 0x prefix
 const ensureHexPrefix = (key: string): `0x${string}` => {
@@ -32,12 +33,14 @@ export const ACCOUNTS = {
 } as const
 
 // Contract configuration: these can be changed by lender (who is the owner of the contract)
+// get these from the config/parameters.json file
 export const CONTRACT_CONFIG = {
-  LOAN_DURATION: 3000 * 180, // 6 months on Rootstock (3000 blocks per day * 180 days)
-  TIMELOCK_LOAN_REQ: 100, // t_B: 100 blocks
-  TIMELOCK_BTC_ESCROW: 200, // t_0: 200 blocks (must be > t_B)
-  TIMELOCK_REPAYMENT_ACCEPT: 150, // t_L: 150 blocks
-  TIMELOCK_BTC_COLLATERAL: 250, // t_1: 250 blocks (must be > t_L)
+  LOAN_DURATION: getTimelock('loanDuration', false), // 6 months on Rootstock (3000 blocks per day * 180 days)
+  TIMELOCK_LOAN_REQ: getTimelock('loanRequest', false), // t_B: 100 blocks
+  TIMELOCK_BTC_ESCROW: getTimelock('btcEscrow', false), // t_0: 200 blocks (must be > t_B)
+  TIMELOCK_REPAYMENT_ACCEPT: getTimelock('repaymentAccept', false), // t_L: 150 blocks
+  TIMELOCK_BTC_COLLATERAL: getTimelock('btcCollateral', false), // t_1: 250 blocks (must be > t_L)
+  LENDER_BOND_PERCENTAGE: getFee('lenderBondPercentage', 10), // 10% lender bond percentage of loan amount
 } as const
 
 // Bitcoin public key placeholder: x_only pubkey (64 characters length - 32 bytes)

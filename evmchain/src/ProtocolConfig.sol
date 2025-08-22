@@ -7,7 +7,7 @@ pragma solidity ^0.8.30;
  *      used across the protocol. This ensures consistency and makes updates easier.
  *      
  * ⚠️  AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
- * Generated from parameters.json on 2025-08-21 17:38:28 UTC
+ * Generated from parameters.json on 2025-08-22 15:53:11 UTC
  * To update: modify parameters.json and run: python config/generate_solidity_config.py
  *      
  * Usage:
@@ -27,7 +27,7 @@ library ProtocolConfig {
     
     string internal constant VERSION = "1.0.0";
     string internal constant DESCRIPTION = "Shared configuration parameters for BTC Yield Protocol";
-    string internal constant GENERATED_ON = "2025-08-21 17:38:28 UTC";
+    string internal constant GENERATED_ON = "2025-08-22 15:53:11 UTC";
     
     // ============ FEE CONSTANTS ============
     
@@ -48,17 +48,17 @@ library ProtocolConfig {
     
     // ============ TIMELOCK CONSTANTS (in blocks) ============
     
-    /// @dev t_B: Timelock for loan request acceptance (shorter than t_0) (100 blocks)
-    uint256 internal constant TIMELOCK_LOAN_REQ = 100;
+    /// @dev t_B: Timelock for loan request acceptance by Borrower, after which lender can take it back (1000 blocks)
+    uint256 internal constant TIMELOCK_LOAN_REQ = 1000;
     
-    /// @dev t_0: Timelock for BTC escrow (enforced on Bitcoin side, must be > t_B) (200 blocks)
-    uint256 internal constant TIMELOCK_BTC_ESCROW = 200;
+    /// @dev t_0: Timelock for BTC escrow (enforced on Bitcoin side, must be > t_B) (2000 blocks)
+    uint256 internal constant TIMELOCK_BTC_ESCROW = 2000;
     
-    /// @dev t_L: Timelock for repayment acceptance (150 blocks)
-    uint256 internal constant TIMELOCK_REPAYMENT_ACCEPT = 150;
+    /// @dev t_L: Timelock for repayment acceptance (1500 blocks)
+    uint256 internal constant TIMELOCK_REPAYMENT_ACCEPT = 1500;
     
-    /// @dev t_1: Timelock for BTC collateral release (must be > t_L, enforced on Bitcoin side) (250 blocks)
-    uint256 internal constant TIMELOCK_BTC_COLLATERAL = 250;
+    /// @dev t_1: Timelock for BTC collateral release (must be > t_L + t_D, enforced on Bitcoin side) (543000 blocks)
+    uint256 internal constant TIMELOCK_BTC_COLLATERAL = 543000;
     
     /// @dev t_D: Total loan duration (6 months on Rootstock: 3000 blocks/day * 180 days) (540000 blocks)
     uint256 internal constant LOAN_DURATION = 540000;
@@ -68,8 +68,8 @@ library ProtocolConfig {
     /// @dev Default annual interest rate: 8.0% (expressed as basis points: 800/10000)
     uint256 internal constant DEFAULT_INTEREST_RATE_BPS = 800;
     
-    /// @dev Minimum annual interest rate: 1.0% (100 basis points)
-    uint256 internal constant MIN_INTEREST_RATE_BPS = 100;
+    /// @dev Minimum annual interest rate: 0.0% (0 basis points)
+    uint256 internal constant MIN_INTEREST_RATE_BPS = 0;
     
     /// @dev Maximum annual interest rate: 25.0% (2500 basis points)
     uint256 internal constant MAX_INTEREST_RATE_BPS = 2500;
@@ -285,7 +285,7 @@ library ProtocolConfig {
      */
     function validateTimelockOrdering() internal pure returns (bool) {
         return TIMELOCK_BTC_ESCROW > TIMELOCK_LOAN_REQ && 
-               TIMELOCK_BTC_COLLATERAL > TIMELOCK_REPAYMENT_ACCEPT;
+               TIMELOCK_BTC_COLLATERAL > (TIMELOCK_REPAYMENT_ACCEPT + LOAN_DURATION);
     }
     
     /**

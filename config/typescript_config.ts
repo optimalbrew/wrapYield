@@ -175,7 +175,7 @@ export function getTimelock(
  * @returns Fee amount as number
  */
 export function getFee(
-  feeType: 'processing' | 'origination' | 'lenderBond', 
+  feeType: 'processing' | 'origination' | 'lenderBondPercentage', 
   amount: number = 1.0
 ): number {
   switch (feeType) {
@@ -189,7 +189,7 @@ export function getFee(
       }
       return 0
       
-    case 'lenderBond':
+    case 'lenderBondPercentage':
       const bondFee = config.fees.lenderBondPercentage
       if (bondFee.percentage) {
         return amount * bondFee.percentage / 100
@@ -265,7 +265,7 @@ export function weiToEther(wei: string | bigint): string {
   const etherWhole = weiBigInt / weiPerEther
   const etherRemainder = weiBigInt % weiPerEther
   
-  if (etherRemainder === 0n) {
+  if (etherRemainder === BigInt(0)) {
     return etherWhole.toString()
   }
   
