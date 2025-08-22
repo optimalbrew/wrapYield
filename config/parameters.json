@@ -1,0 +1,170 @@
+{
+  "version": "1.0.0",
+  "description": "Shared configuration parameters for BTC Yield Protocol",
+  "lastUpdated": "2024-12-19",
+  
+  "fees": {
+    "processingFee": {
+      "value": "0.001",
+      "unit": "ether",
+      "description": "Refundable processing fee for spam prevention"
+    },
+    "originationFee": {
+      "percentage": 1,
+      "divisor": 1000,
+      "description": "1% origination fee for activated loans"
+    },
+    "lenderBondPercentage": {
+      "percentage": 10,
+      "description": "10% lender bond percentage of loan amount"
+    }
+  },
+  
+  "limits": {
+    "minLoanAmount": {
+      "value": "0.005",
+      "unit": "ether",
+      "description": "Minimum loan amount (approximately $500 in rBTC)"
+    },
+    "maxLoanAmount": {
+      "value": "100",
+      "unit": "ether",
+      "description": "Maximum loan amount (can be adjusted)"
+    }
+  },
+  
+  "timelocks": {
+    "description": "All timelock values are in blocks. For Bitcoin, multiply by conversionRatio",
+    "loanRequest": {
+      "blocks": 100,
+      "symbol": "t_B",
+      "description": "Timelock for loan request acceptance (shorter than t_0)"
+    },
+    "btcEscrow": {
+      "blocks": 200,
+      "symbol": "t_0", 
+      "description": "Timelock for BTC escrow (enforced on Bitcoin side, must be > t_B)"
+    },
+    "repaymentAccept": {
+      "blocks": 150,
+      "symbol": "t_L",
+      "description": "Timelock for repayment acceptance"
+    },
+    "btcCollateral": {
+      "blocks": 250,
+      "symbol": "t_1",
+      "description": "Timelock for BTC collateral release (must be > t_L, enforced on Bitcoin side)"
+    },
+    "loanDuration": {
+      "blocks": 540000,
+      "symbol": "t_D",
+      "description": "Total loan duration (6 months on Rootstock: 3000 blocks/day * 180 days)"
+    }
+  },
+  
+  "interestRates": {
+    "default": {
+      "annualPercentage": 8.0,
+      "description": "Default annual interest rate"
+    },
+    "minimum": {
+      "annualPercentage": 1.0,
+      "description": "Minimum allowed interest rate"
+    },
+    "maximum": {
+      "annualPercentage": 25.0,
+      "description": "Maximum allowed interest rate"
+    }
+  },
+  
+  "blockchainConfig": {
+    "btcToEvmBlockRatio": {
+      "ratio": "1:20",
+      "description": "Approximate ratio of Bitcoin blocks to EVM blocks for timelock conversion"
+    },
+    "btcConfirmations": {
+      "required": 6,
+      "description": "Required Bitcoin confirmations for transaction finality"
+    },
+    "evmConfirmations": {
+      "required": 12,
+      "description": "Required EVM confirmations for transaction finality"
+    }
+  },
+  
+  "bitcoin": {
+    "network": "regtest",
+    "addressTypes": {
+      "supported": ["p2tr"],
+      "p2tr": {
+        "minLength": 62,
+        "maxLength": 63,
+        "description": "Pay-to-Taproot address format"
+      }
+    },
+    "publicKeyFormat": {
+      "type": "schnorr_x_only",
+      "length": 64,
+      "description": "32-byte Schnorr x-only public key (64 hex characters)"
+    }
+  },
+  
+  "validation": {
+    "preimageHash": {
+      "length": 64,
+      "format": "hex",
+      "description": "SHA256 hash (32 bytes as 64 hex characters)"
+    },
+    "addresses": {
+      "ethereum": {
+        "length": 42,
+        "format": "0x[40 hex chars]"
+      }
+    }
+  },
+  
+  "networks": {
+    "development": {
+      "ethereum": {
+        "chainId": 31337,
+        "name": "Anvil Local",
+        "rpcUrl": "http://127.0.0.1:8545"
+      },
+      "bitcoin": {
+        "network": "regtest",
+        "rpcUrl": "http://127.0.0.1:18443"
+      }
+    },
+    "testnet": {
+      "ethereum": {
+        "chainId": 31,
+        "name": "Rootstock Testnet",
+        "rpcUrl": "https://public-node.testnet.rsk.co"
+      },
+      "bitcoin": {
+        "network": "testnet",
+        "rpcUrl": "bitcoin-testnet-rpc-url"
+      }
+    },
+    "mainnet": {
+      "ethereum": {
+        "chainId": 30,
+        "name": "Rootstock Mainnet", 
+        "rpcUrl": "https://public-node.rsk.co"
+      },
+      "bitcoin": {
+        "network": "mainnet",
+        "rpcUrl": "bitcoin-mainnet-rpc-url"
+      }
+    }
+  },
+
+  "security": {
+    "maxActiveLoansPerBorrower": 1,
+    "lenderSlashingEnabled": true,
+    "emergencyPause": {
+      "enabled": false,
+      "description": "Emergency pause mechanism for contract operations"
+    }
+  }
+}
