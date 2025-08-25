@@ -1,11 +1,11 @@
 """
 Tests for separate signature generation workflow.
 
-This simulates the real-world scenario where borrower and lender generate
+This simulates the scenario where borrower and lender generate
 signatures separately, and borrower sends signature to lender to complete the witness.
-
-Key security feature: Borrower's preimage is NOT included in transmitted data.
-The lender adds the preimage when completing the final witness.
+The specific transaction can be considered to be pre-signed by the borrower and
+the lender can use this to move funds from the escrow to the collateral using 
+a preimage revealed by the borrower when accepting the loan on EVM chain
 """
 
 import json
@@ -201,10 +201,10 @@ def test_complete_separate_signature_workflow(test_keys, test_data, bitcoin_setu
     print("🔄 TESTING COMPLETE SEPARATE SIGNATURE WORKFLOW")
     print("="*60)
     
-    print("\n👩‍💻 STEP 1: Borrower generates signature offline...")
+    print("\n 👩‍💻 STEP 1: Borrower generates signature offline...")
     signature_file_path = _generate_borrower_signature(test_keys, test_data, bitcoin_setup)
     
-    print("\n👨‍💼 STEP 2: Lender receives signature and completes transaction...")
+    print("\n 👨‍💼 STEP 2: Lender receives signature and completes transaction...")
     
     # Simulate some time passing (lender processing the signature)
     import time

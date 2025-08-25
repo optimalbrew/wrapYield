@@ -1,0 +1,123 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: btc-yield-postgres
+    environment:
+      POSTGRES_DB: btc_yield
+      POSTGRES_USER: btc_yield_user
+      POSTGRES_PASSWORD: btc_yield_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U btc_yield_user -d btc_yield"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: btc-yield-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Python API service for Bitcoin operations
+  python-api:
+    build:
+      context: ../python-api
+      dockerfile: Dockerfile
+    container_name: btc-yield-python-api
+    environment:
+      PYTHON_API_HOST: 0.0.0.0
+      PYTHON_API_PORT: 8001
+      PYTHON_API_BITCOIN_NETWORK: regtest
+      PYTHON_API_VAULTERO_PATH: /app/btc-vaultero
+      PYTHON_API_LOG_LEVEL: info
+      PYTHON_API_CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001"]'
+      # Bitcoin Core RPC connection (matches ../btc-backend container)
+      PYTHON_API_BITCOIN_RPC_HOST: host.docker.internal  # Access Bitcoin Core on host
+      PYTHON_API_BITCOIN_RPC_PORT: 18443
+      PYTHON_API_BITCOIN_RPC_USER: bitcoin
+      PYTHON_API_BITCOIN_RPC_PASSWORD: localtest
+      # WARNING: In production, use secure key management!
+      PYTHON_API_LENDER_PRIVATE_KEY: cVt4o7BGAig1UXywgGSmARhxMBkTdBNh2TdU2Rk8QmJKFKRmyBAB  # Testnet example key
+      PYTHON_API_LENDER_PUBKEY: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+    volumes:
+      - ../btc-vaultero:/app/btc-vaultero:ro  # Mount btc-vaultero at runtime
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Node.js Backend Service (Express/TypeScript API)
+  backend-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btc-yield-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      # Database connection
+      DATABASE_URL: postgresql://btc_yield_user:btc_yield_password@postgres:5432/btc_yield
+      # Redis connection
+      REDIS_URL: redis://redis:6379
+      # Python API connection
+      PYTHON_API_URL: http://python-api:8001
+      # CORS origins
+      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001"]'
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      python-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: btc-yield-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@btcyield.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - postgres
+    profiles:
+      - dev # Only start with --profile dev
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: btc-yield-network
