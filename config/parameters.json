@@ -11,7 +11,6 @@
     },
     "originationFee": {
       "percentage": 1,
-      "divisor": 1000,
       "description": "1% origination fee for activated loans (in bitcoin)"
     },
     "lenderBondPercentage": {

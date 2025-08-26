@@ -181,7 +181,7 @@ contract ConfigurablebtcCollateralLoan is Ownable, ReentrancyGuard {
         // Check that new config matches old hardcoded values
         bool processingFeeMatch = ProtocolConfig.getProcessingFee() == 0.001 ether;
         bool minLoanMatch = ProtocolConfig.getMinLoanAmount() == 0.005 ether;  
-        bool originFeeMatch = ProtocolConfig.getOriginFeePercentageDivisor() == 1000;
+        bool originFeeMatch = ProtocolConfig.getOriginFeePercentage() == 1;
         bool bondMatch = ProtocolConfig.getLenderBondPercentage() == 10;
         
         return processingFeeMatch && minLoanMatch && originFeeMatch && bondMatch;

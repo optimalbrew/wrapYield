@@ -40,7 +40,7 @@ export const CONTRACT_CONFIG = {
   TIMELOCK_BTC_ESCROW: getTimelock('btcEscrow', false), // t_0: 200 blocks (must be > t_B)
   TIMELOCK_REPAYMENT_ACCEPT: getTimelock('repaymentAccept', false), // t_L: 150 blocks
   TIMELOCK_BTC_COLLATERAL: getTimelock('btcCollateral', false), // t_1: 250 blocks (must be > t_L)
-  LENDER_BOND_PERCENTAGE: getFee('lenderBondPercentage', 10), // 10% lender bond percentage of loan amount
+  LENDER_BOND_PERCENTAGE: getFee('lenderBondPercentage'),
 } as const
 
 // Bitcoin public key placeholder: x_only pubkey (64 characters length - 32 bytes)

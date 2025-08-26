@@ -96,6 +96,17 @@ export default function BorrowerPage() {
     },
   }) as { data: any, refetch: () => void, error: Error | null }
 
+  // Get the loan parameters if borrower has a loan
+  const { data: borrowerLoanParameters, refetch: refetchBorrowerLoanParameters } = useReadContract({
+    address: CONTRACTS.BTC_COLLATERAL_LOAN,
+    abi: BTC_COLLATERAL_LOAN_ABI,
+    functionName: 'getLoanParameters',
+    args: [borrowerLoanDetails || BigInt(0)],
+    query: {
+      enabled: !!CONTRACTS.BTC_COLLATERAL_LOAN && account.status === 'connected' && !!borrowerLoanDetails && borrowerLoanDetails > BigInt(0),
+    },
+  }) as { data: any, refetch: () => void, error: Error | null }
+
   // State for account transaction nonce
   const [accountNonce, setAccountNonce] = useState<number | null>(null)
 
@@ -168,13 +179,14 @@ export default function BorrowerPage() {
 
   // Form state
   const [loanAmount, setLoanAmount] = useState('0.1')
-  const [collateralAmount, setCollateralAmount] = useState('0.12')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
   const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('1234567890432156789012345678901234567890123456789012345678901234')
   const [btcAddress, setBtcAddress] = useState('bcrt1pxy2kgdygjrsqtzq2n0yrf1393p83kkfjhx0wlhd4ks9a2l7qj0m9s8n5v')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
   const [preimageBorrower, setPreimageBorrower] = useState<`0x${string}`>('0x05e5cdc502cc641787db0383a01d4b6baec69b62b6dbf9d9d9600872bbbed741')
+  const [txidP2tr0, setTxidP2tr0] = useState<`0x${string}`>('0xef71afe3b2f77a78c44843db2f0ab151b8fb0c298403e3634869ab65b8f677a4')
+  const [voutP2tr0, setVoutP2tr0] = useState('0')
 
   // Validation functions
   const isValidHexString = (value: string): value is `0x${string}` => {
@@ -218,6 +230,8 @@ export default function BorrowerPage() {
       btcAddress,
       borrowerBtcPubkey,
       preimageHashBorrower,
+      txid_p2tr0: txidP2tr0,
+      vout_p2tr0: voutP2tr0,
       value: BigInt('1000000000000000') // PROCESSING_FEE (0.001 ETH in wei)
     })
 
@@ -232,6 +246,8 @@ export default function BorrowerPage() {
           btcAddress, // btcAddress
           borrowerBtcPubkey, // btcPubkey
           preimageHashBorrower, // preimageHashBorrower
+          txidP2tr0, // txid_p2tr0
+          parseInt(voutP2tr0), // vout_p2tr0
         ],
         value: BigInt('1000000000000000'), // PROCESSING_FEE (0.001 ETH in wei)
       })
@@ -578,7 +594,10 @@ export default function BorrowerPage() {
                   <div className="text-sm text-blue-800">
                     <div className="font-medium">Your Loan ID: {borrowerLoanDetails.toString()}</div>
                     <button
-                      onClick={() => refetchBorrowerLoanDetails()}
+                      onClick={() => {
+                        refetchBorrowerLoanDetails()
+                        refetchBorrowerLoanParameters()
+                      }}
                       className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
                     >
                       🔄 Refresh Details
@@ -589,14 +608,14 @@ export default function BorrowerPage() {
                 {borrowerLoan && (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h4 className="font-medium text-green-800 mb-3">📋 Loan Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                       <div>
                         <div className="font-medium text-green-700 mb-2">Basic Details</div>
                         <div className="space-y-1 text-xs text-green-600">
                           <div>Borrower: <code className="bg-green-100 px-1 rounded">{borrowerLoan.borrowerAddr || 'N/A'}</code></div>
                           <div>BTC Pubkey: <code className="bg-green-100 px-1 rounded">{borrowerLoan.borrowerBtcPubkey || 'N/A'}</code></div>
                           <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.amount ? formatEther(BigInt(borrowerLoan.amount)) : 'N/A'} ETH</code></div>
-                          <div>Collateral: <code className="bg-green-100 px-1 rounded">{borrowerLoan.collateralAmount ? formatEther(BigInt(borrowerLoan.collateralAmount)) : 'N/A'} ETH</code></div>
+                          <div>Collateral: <code className="bg-green-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
                           <div>Bond Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.bondAmount ? formatEther(BigInt(borrowerLoan.bondAmount)) : 'N/A'} ETH</code></div>
                           <div>Status: <code className="bg-green-100 px-1 rounded">{borrowerLoan.status || 'N/A'}</code></div>
                         </div>
@@ -606,12 +625,43 @@ export default function BorrowerPage() {
                         <div className="space-y-1 text-xs text-green-600">
                           <div>Preimage Hash Borrower: <code className="bg-green-100 px-1 rounded">{borrowerLoan.preimageHashBorrower || 'N/A'}</code></div>
                           <div>Preimage Hash Lender: <code className="bg-green-100 px-1 rounded">{borrowerLoan.preimageHashLender || 'N/A'}</code></div>
-                          <div>Request Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.requestBlockheight || 'N/A'}</code></div>
+                          <div>Offer Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.offerBlockheight || 'N/A'}</code></div>
                           <div>Activation Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.activationBlockheight || 'N/A'}</code></div>
                           <div>Repayment Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.repaymentBlockheight || 'N/A'}</code></div>
                         </div>
                       </div>
+                      <div>
+                        <div className="font-medium text-green-700 mb-2">Bitcoin Transaction</div>
+                        <div className="space-y-1 text-xs text-green-600">
+                          <div>Transaction ID: <code className="bg-green-100 px-1 rounded">{borrowerLoan.txid_p2tr0 || 'N/A'}</code></div>
+                          <div>Output Index: <code className="bg-green-100 px-1 rounded">{borrowerLoan.vout_p2tr0 || 'N/A'}</code></div>
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Loan Parameters */}
+                    {borrowerLoanParameters && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <h4 className="font-medium text-blue-800 mb-3">⚙️ Fixed Loan Parameters</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <div className="font-medium text-blue-700 mb-2">Fees & Rates</div>
+                            <div className="space-y-1 text-xs text-blue-600">
+                              <div>Interest Rate: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.int_rate ? Number(borrowerLoanParameters.int_rate) : 'N/A'}</code></div>
+                              <div>Processing Fee: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.proc_fee ? formatEther(BigInt(borrowerLoanParameters.proc_fee)) : 'N/A'} ETH</code></div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-medium text-blue-700 mb-2">Timelocks</div>
+                            <div className="space-y-1 text-xs text-blue-600">
+                              <div>Duration: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.duration ? Number(borrowerLoanParameters.duration) : 'N/A'} blocks</code></div>
+                              <div>Borrower Timelock: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.tl_borrower ? Number(borrowerLoanParameters.tl_borrower) : 'N/A'} blocks</code></div>
+                              <div>Lender Timelock: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.tl_lender ? Number(borrowerLoanParameters.tl_lender) : 'N/A'} blocks</code></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -633,29 +683,16 @@ export default function BorrowerPage() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Request New Loan</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (ETH)</label>
-                  <input
-                    type="text"
-                    value={loanAmount}
-                    onChange={(e) => setLoanAmount(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="0.01"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Minimum: 0.005 ETH</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Collateral Amount (ETH)</label>
-                  <input
-                    type="text"
-                    value={collateralAmount}
-                    onChange={(e) => setCollateralAmount(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="0.02"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Should be &gt; loan amount</p>
-                </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (ETH)</label>
+                <input
+                  type="text"
+                  value={loanAmount}
+                  onChange={(e) => setLoanAmount(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">Minimum: 0.005 ETH</p>
               </div>
 
               <div className="mb-4">
@@ -694,6 +731,32 @@ export default function BorrowerPage() {
                 />
                 <p className="text-xs text-gray-500 mt-1">Hash of your preimage for loan security</p>
                 <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bitcoin Transaction ID (txid_p2tr0)</label>
+                <input
+                  type="text"
+                  value={txidP2tr0}
+                  onChange={(e) => setValidHexString(e.target.value, setTxidP2tr0)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0x..."
+                />
+                <p className="text-xs text-gray-500 mt-1">Bitcoin transaction ID of the escrow UTXO</p>
+                <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Output Index (vout_p2tr0)</label>
+                <input
+                  type="number"
+                  value={voutP2tr0}
+                  onChange={(e) => setVoutP2tr0(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0"
+                  min="0"
+                />
+                <p className="text-xs text-gray-500 mt-1">Output index of the escrow UTXO in the bitcoin transaction</p>
               </div>
 
               <button

@@ -40,8 +40,8 @@ library ProtocolConfig {
     /// @dev Maximum loan amount: 100 ether (Maximum loan amount (can be adjusted))
     uint256 internal constant MAX_LOAN_AMOUNT = 100 ether;
     
-    /// @dev Origination fee: 1% (expressed as divisor: 1000)
-    uint256 internal constant ORIGIN_FEE_PERCENTAGE_DIVISOR = 1000;
+    /// @dev Origination fee: 1% 
+    uint256 internal constant ORIGIN_FEE_PERCENTAGE = 1;
     
     /// @dev Lender bond percentage: 10%
     uint256 internal constant LENDER_BOND_PERCENTAGE = 10;
@@ -157,8 +157,8 @@ library ProtocolConfig {
         return MAX_LOAN_AMOUNT;
     }
     
-    function getOriginFeePercentageDivisor() internal pure returns (uint256) {
-        return ORIGIN_FEE_PERCENTAGE_DIVISOR;
+    function getOriginFeePercentage() internal pure returns (uint256) {
+        return ORIGIN_FEE_PERCENTAGE;
     }
     
     function getLenderBondPercentage() internal pure returns (uint256) {
@@ -227,7 +227,7 @@ library ProtocolConfig {
      * @return Fee amount in wei
      */
     function calculateOriginationFee(uint256 loanAmount) internal pure returns (uint256) {
-        return loanAmount / ORIGIN_FEE_PERCENTAGE_DIVISOR;
+        return loanAmount * ORIGIN_FEE_PERCENTAGE / 100;
     }
     
     /**

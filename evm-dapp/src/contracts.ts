@@ -1,4 +1,5 @@
 import { type Address } from 'viem'
+import type { Loan, LoanParameters } from './types'
 
 // Contract ABIs - these will be populated from the compiled contracts
 export const ETHER_SWAP_ABI = [
@@ -25,7 +26,9 @@ export const BTC_COLLATERAL_LOAN_ABI = [
       {"name": "amount", "type": "uint256"},
       {"name": "btcAddress", "type": "string"},
       {"name": "btcPubkey", "type": "string"},
-      {"name": "preimageHashBorrower", "type": "bytes32"}
+      {"name": "preimageHashBorrower", "type": "bytes32"},
+      {"name": "txid_p2tr0", "type": "bytes32"},
+      {"name": "vout_p2tr0", "type": "uint32"}
     ],
     "outputs": [],
     "stateMutability": "payable"
@@ -157,15 +160,31 @@ export const BTC_COLLATERAL_LOAN_ABI = [
         {"name": "borrowerAddr", "type": "address"},
         {"name": "borrowerBtcPubkey", "type": "string"},
         {"name": "amount", "type": "uint256"},
-        {"name": "collateralAmount", "type": "uint256"},
         {"name": "bondAmount", "type": "uint256"},
         {"name": "status", "type": "uint8"},
         {"name": "preimageHashBorrower", "type": "bytes32"},
         {"name": "preimageHashLender", "type": "bytes32"},
-        {"name": "requestBlockheight", "type": "uint256"},
-        {"name": "loanId", "type": "uint256"},
+        {"name": "txid_p2tr0", "type": "bytes32"},
+        {"name": "vout_p2tr0", "type": "uint32"},
+        {"name": "offerBlockheight", "type": "uint256"},
         {"name": "activationBlockheight", "type": "uint256"},
         {"name": "repaymentBlockheight", "type": "uint256"}
+      ]
+    }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getLoanParameters",
+    "inputs": [{"name": "loanId", "type": "uint256"}],
+    "outputs": [{
+      "type": "tuple",
+      "components": [
+        {"name": "int_rate", "type": "uint256"},
+        {"name": "proc_fee", "type": "uint256"},
+        {"name": "duration", "type": "uint256"},
+        {"name": "tl_borrower", "type": "uint256"},
+        {"name": "tl_lender", "type": "uint256"}
       ]
     }],
     "stateMutability": "view"
@@ -284,3 +303,7 @@ export type BtcCollateralLoanContract = {
   address: Address
   abi: typeof BTC_COLLATERAL_LOAN_ABI
 }
+
+// Function return types for better type safety
+export type GetLoanResult = Loan
+export type GetLoanParametersResult = LoanParameters

@@ -175,8 +175,7 @@ export function getTimelock(
  * @returns Fee amount as number
  */
 export function getFee(
-  feeType: 'processing' | 'origination' | 'lenderBondPercentage', 
-  amount: number = 1.0
+  feeType: 'processing' | 'origination' | 'lenderBondPercentage'
 ): number {
   switch (feeType) {
     case 'processing':
@@ -184,15 +183,15 @@ export function getFee(
       
     case 'origination':
       const origFee = config.fees.originationFee
-      if (origFee.percentage && origFee.divisor) {
-        return amount * origFee.percentage / origFee.divisor
+      if (origFee.percentage) {
+        return origFee.percentage
       }
       return 0
       
     case 'lenderBondPercentage':
       const bondFee = config.fees.lenderBondPercentage
       if (bondFee.percentage) {
-        return amount * bondFee.percentage / 100
+        return bondFee.percentage
       }
       return 0
       

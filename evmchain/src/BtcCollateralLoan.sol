@@ -40,25 +40,23 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     uint256 public constant MIN_LOAN_AMOUNT = ProtocolConfig.MIN_LOAN_AMOUNT;
     /// rBTC (about $500) Minimum loan amount
 
-    /// 1% Origin fee for activated loan, used on bitcoin side
-    uint256 public constant ORIGIN_FEE_PERCENTAGE_DIVISOR = ProtocolConfig.ORIGIN_FEE_PERCENTAGE_DIVISOR;
+    /// For info: Origin fee for activated loan, used on bitcoin side
+    uint256 public constant ORIGIN_FEE_PERCENTAGE = ProtocolConfig.ORIGIN_FEE_PERCENTAGE;
 
-    /// 10% lender bond percentage
+    /// lender bond percentage
     uint256 public constant LENDER_BOND_PERCENTAGE = ProtocolConfig.LENDER_BOND_PERCENTAGE;
 
-    /// Lender bond percentage (10% of loan amount)
 
-    //todo: Ensure that changes to these parameters do not affect active loans
     uint256 public timelockLoanReq; // t_B (shorter than t_O) // enforced on the evm side
     
-    //this needs to be conservatively large, so that once expressed in bitcoin blocks (e.g. 1:20 ratio), it is 
+    //For info. This needs to be conservatively large, so that once expressed in bitcoin blocks (e.g. 1:20 ratio), it is 
     // still large enoughto ensure it does not lead to situations where the borrower has custody of both
     // the BTC collateral and the EVM chain loan at the same time.
     uint256 public timelockBtcEscrow; // t_0 // enforced on the bitcoin side, should not be used here
     
     uint256 public timelockRepaymentAccept; // t_L // enforced on the evm side
     
-    //this can safely be very large. Also needs to be converted to bitcoin blocks using a ratio e.g. 1:20
+    //For info. This can safely be very large. Also needs to be converted to bitcoin blocks using a ratio e.g. 1:20
     uint256 public timelockBtcCollateral; // t_1 (longer than t_L + t_D) // enforced on the bitcoin side, not used here
 
     /// @dev Duration starts once loan is activated. e.g. 3000*180 blocks (6 months on rootstock)
@@ -67,7 +65,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     /// @dev currently unused.
     uint256 public loanInterestRate = ProtocolConfig.DEFAULT_INTEREST_RATE_BPS;
 
-    /// @dev Loan counter: This is total number of loans requested thus far, not the actual number outstanding or issued
+    /// @dev Loans "Requested" counter: This is total number of loans requested thus far, not the actual number outstanding or issued
     uint256 private _loanIds;
 
     // ============ ENUMS ============
@@ -553,6 +551,16 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     function getLoan(uint256 loanId) external view returns (Loan memory) {
         require(loanId > 0 && loanId <= _loanIds, "Loan: loan does not exist");
         return loans[loanId];
+    }
+
+    /**
+     * @dev Get loan parameters
+     * @param loanId The loan ID
+     * @return LoanParameters struct
+     */
+    function getLoanParameters(uint256 loanId) external view returns (LoanParameters memory) {
+        require(loanId > 0 && loanId <= _loanIds, "Loan: loan does not exist");
+        return loanParameters[loanId];
     }
 
     /**

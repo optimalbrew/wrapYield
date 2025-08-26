@@ -129,7 +129,7 @@ def extract_solidity_constants():
         patterns = {
             'PROCESSING_FEE': r'uint256 internal constant PROCESSING_FEE = ([\d\.]+) ether;',
             'MIN_LOAN_AMOUNT': r'uint256 internal constant MIN_LOAN_AMOUNT = ([\d\.]+) ether;',
-            'ORIGIN_FEE_PERCENTAGE_DIVISOR': r'uint256 internal constant ORIGIN_FEE_PERCENTAGE_DIVISOR = (\d+);',
+            'ORIGIN_FEE_PERCENTAGE': r'uint256 internal constant ORIGIN_FEE_PERCENTAGE = (\d+);',
             'LENDER_BOND_PERCENTAGE': r'uint256 internal constant LENDER_BOND_PERCENTAGE = (\d+);',
             'LOAN_DURATION': r'uint256 internal constant LOAN_DURATION = (\d+);',
         }
@@ -155,7 +155,7 @@ def cross_validate_values():
     expected = {
         'processing_fee': json_config['fees']['processingFee']['value'],
         'min_loan_amount': json_config['limits']['minLoanAmount']['value'],
-        'origin_fee_divisor': json_config['fees']['originationFee']['divisor'],
+        'origination_fee': json_config['fees']['originationFee']['percentage'],
         'lender_bond_percentage': json_config['fees']['lenderBondPercentage']['percentage'],
         'loan_duration': json_config['timelocks']['loanDuration']['blocks'],
     }
@@ -173,7 +173,7 @@ def cross_validate_values():
         comparisons = [
             ('processing_fee', 'PROCESSING_FEE', expected['processing_fee']),
             ('min_loan_amount', 'MIN_LOAN_AMOUNT', expected['min_loan_amount']),
-            ('origin_fee_divisor', 'ORIGIN_FEE_PERCENTAGE_DIVISOR', str(expected['origin_fee_divisor'])),
+            ('origination_fee', 'ORIGIN_FEE_PERCENTAGE', str(expected['origination_fee'])),
             ('lender_bond_percentage', 'LENDER_BOND_PERCENTAGE', str(expected['lender_bond_percentage'])),
             ('loan_duration', 'LOAN_DURATION', str(expected['loan_duration'])),
         ]

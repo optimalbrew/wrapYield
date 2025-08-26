@@ -52,15 +52,15 @@ contract ProtocolConfigTest is Test {
         assertEq(maxLoan, 100 ether);
         
         // Test fee percentages
-        uint256 originDivisor = ProtocolConfig.getOriginFeePercentageDivisor();
+        uint256 originFee = ProtocolConfig.getOriginFeePercentage();
         uint256 lenderBond = ProtocolConfig.getLenderBondPercentage();
-        assertEq(originDivisor, 1000); // 1% = 1/1000
+        assertEq(originFee, 1); // 1% = 1/1000
         assertEq(lenderBond, 10);       // 10%
         
         console.log("Processing fee:", processingFee);
         console.log("Min loan amount:", minLoan);
         console.log("Max loan amount:", maxLoan);
-        console.log("Origination fee divisor:", originDivisor);
+        console.log("Origination fee percentage:", originFee);
         console.log("Lender bond percentage:", lenderBond);
     }
     
@@ -122,7 +122,7 @@ contract ProtocolConfigTest is Test {
         
         // Test origination fee (1% of loan amount)
         uint256 originFee = ProtocolConfig.calculateOriginationFee(loanAmount);
-        assertEq(originFee, 0.0025 ether); // 2.5 * 0.001 = 0.0025
+        assertEq(originFee, 0.025 ether); // 2.5 * 0.01 = 0.025
         
         // Test lender bond (10% of loan amount)
         uint256 lenderBond = ProtocolConfig.calculateLenderBond(loanAmount);
@@ -220,8 +220,8 @@ contract ProtocolConfigTest is Test {
         uint256 originFee = ProtocolConfig.calculateOriginationFee(maxLoan);
         uint256 lenderBond = ProtocolConfig.calculateLenderBond(maxLoan);
         
-        // Max loan is 100 ETH, so origin fee should be 0.1 ETH and bond 10 ETH
-        assertEq(originFee, 0.1 ether);
+        // Max loan is 100 ETH, so origin fee should be 1 ETH and bond 10 ETH
+        assertEq(originFee, 1 ether);
         assertEq(lenderBond, 10 ether);
         
         console.log("Max loan amount:", maxLoan);
@@ -257,7 +257,7 @@ contract ProtocolConfigTest is Test {
         // These should match the hardcoded values in the existing contract
         assertEq(ProtocolConfig.getProcessingFee(), 0.001 ether);
         assertEq(ProtocolConfig.getMinLoanAmount(), 0.005 ether);
-        assertEq(ProtocolConfig.getOriginFeePercentageDivisor(), 1000);
+        assertEq(ProtocolConfig.getOriginFeePercentage(), 1);
         assertEq(ProtocolConfig.getLenderBondPercentage(), 10);
         
         console.log("All constants match existing BtcCollateralLoan contract values");

@@ -135,6 +135,17 @@ export default function LenderPage() {
     },
   }) as { data: any, refetch: () => void, error: Error | null }
 
+  // Get loan parameters for the selected loan ID
+  const { data: loanParameters, refetch: refetchLoanParameters } = useReadContract({
+    address: CONTRACTS.BTC_COLLATERAL_LOAN,
+    abi: BTC_COLLATERAL_LOAN_ABI,
+    functionName: 'getLoanParameters',
+    args: [BigInt(selectedLoanId || '0')],
+    query: {
+      enabled: !!CONTRACTS.BTC_COLLATERAL_LOAN && account.status === 'connected' && !!selectedLoanId && selectedLoanId !== '0',
+    },
+  }) as { data: any, refetch: () => void, error: Error | null }
+
   // Monitor transaction success and log hashes
   useEffect(() => {
     // Log transaction hashes to console for debugging
@@ -171,8 +182,9 @@ export default function LenderPage() {
     if (selectedLoanId && selectedLoanId !== '0' && CONTRACTS.BTC_COLLATERAL_LOAN) {
       console.log('🔄 Refetching loan details for loan ID:', selectedLoanId)
       refetchLoanDetails()
+      refetchLoanParameters()
     }
-  }, [selectedLoanId, CONTRACTS.BTC_COLLATERAL_LOAN, refetchLoanDetails])
+  }, [selectedLoanId, CONTRACTS.BTC_COLLATERAL_LOAN, refetchLoanDetails, refetchLoanParameters])
 
   // Debug loan details when they change
   useEffect(() => {
@@ -641,9 +653,12 @@ export default function LenderPage() {
                     placeholder="0"
                   />
                   <button
-                    onClick={() => refetchLoanDetails()}
+                    onClick={() => {
+                      refetchLoanDetails()
+                      refetchLoanParameters()
+                    }}
                     disabled={!selectedLoanId || selectedLoanId === '0'}
-                    className="px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium"
                   >
                     🔄 Refresh
                   </button>
@@ -717,14 +732,14 @@ export default function LenderPage() {
                   
                   {loanDetails ? (
                     <div className="space-y-2 text-sm">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
                           <div className="font-medium text-blue-700 mb-2">Basic Information</div>
                           <div className="space-y-1 text-xs text-blue-600">
                             <div>Borrower Address: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerAddr || 'N/A'}</code></div>
                             <div>Borrower BTC Pubkey: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerBtcPubkey || 'N/A'}</code></div>
                             <div>Loan Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.amount ? formatEther(BigInt(loanDetails.amount)) : 'N/A'} ETH</code></div>
-                            <div>Collateral Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.collateralAmount ? formatEther(BigInt(loanDetails.collateralAmount)) : 'N/A'} ETH</code></div>
+                            <div>Collateral Amount: <code className="bg-blue-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
                             <div>Bond Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.bondAmount ? formatEther(BigInt(loanDetails.bondAmount)) : 'N/A'} ETH</code></div>
                             <div>Status: <code className="bg-blue-100 px-1 rounded">{loanDetails.status || 'N/A'}</code></div>
                           </div>
@@ -734,9 +749,16 @@ export default function LenderPage() {
                           <div className="space-y-1 text-xs text-blue-600">
                             <div>Preimage Hash Borrower: <code className="bg-blue-100 px-1 rounded">{loanDetails.preimageHashBorrower || 'N/A'}</code></div>
                             <div>Preimage Hash Lender: <code className="bg-blue-100 px-1 rounded">{loanDetails.preimageHashLender || 'N/A'}</code></div>
-                            <div>Request Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.requestBlockheight ? Number(loanDetails.requestBlockheight) : 'N/A'}</code></div>
+                            <div>Offer Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.offerBlockheight ? Number(loanDetails.offerBlockheight) : 'N/A'}</code></div>
                             <div>Activation Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.activationBlockheight ? Number(loanDetails.activationBlockheight) : 'N/A'}</code></div>
                             <div>Repayment Block: <code className="bg-blue-100 px-1 rounded">{loanDetails.repaymentBlockheight ? Number(loanDetails.repaymentBlockheight) : 'N/A'}</code></div>
+                          </div>
+                        </div>
+                        <div>
+                          <div className="font-medium text-blue-700 mb-2">Bitcoin Transaction</div>
+                          <div className="space-y-1 text-xs text-blue-600">
+                            <div>Transaction ID: <code className="bg-blue-100 px-1 rounded">{loanDetails.txid_p2tr0 || 'N/A'}</code></div>
+                            <div>Output Index: <code className="bg-blue-100 px-1 rounded">{loanDetails.vout_p2tr0 || 'N/A'}</code></div>
                           </div>
                         </div>
                       </div>
@@ -756,6 +778,24 @@ export default function LenderPage() {
                             <div>
                               <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code></div>
                               <div className="text-gray-500">({(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))).toString()} wei)</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Loan Parameters */}
+                      {loanParameters && (
+                        <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded">
+                          <div className="font-medium text-purple-800 mb-2">⚙️ Fixed Loan Parameters</div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-purple-700">
+                            <div>
+                              <div>Interest Rate: <code className="bg-purple-100 px-1 rounded">{loanParameters.int_rate ? Number(loanParameters.int_rate) : 'N/A'}</code></div>
+                              <div>Processing Fee: <code className="bg-purple-100 px-1 rounded">{loanParameters.proc_fee ? formatEther(BigInt(loanParameters.proc_fee)) : 'N/A'} ETH</code></div>
+                            </div>
+                            <div>
+                              <div>Duration: <code className="bg-purple-100 px-1 rounded">{loanParameters.duration ? Number(loanParameters.duration) : 'N/A'} blocks</code></div>
+                              <div>Borrower Timelock: <code className="bg-purple-100 px-1 rounded">{loanParameters.tl_borrower ? Number(loanParameters.tl_borrower) : 'N/A'} blocks</code></div>
+                              <div>Lender Timelock: <code className="bg-purple-100 px-1 rounded">{loanParameters.tl_lender ? Number(loanParameters.tl_lender) : 'N/A'} blocks</code></div>
                             </div>
                           </div>
                         </div>
