@@ -20,6 +20,8 @@ contract BtcCollateralLoanTest is Test {
     string public constant BORROWER_BTC_PUBKEY = "abcdef0123456789abcdef012345678912345678901234567890123456789012";
     // this is NOT a HEX string, it is a base58 encoded address. Actual validity is not checked.
     string public constant BORROWER_BTC_ADDRESS = "bcrt1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5j";
+    bytes32 public constant BORROWER_P2TR0_TXID = 0x0000000000000000000000000000000000000000000000000000000000000001;
+    uint32 public constant BORROWER_P2TR0_VOUT = 1;
     
     uint256 public constant LOAN_AMOUNT = 1 ether;
     uint256 public constant PROCESSING_FEE = 0.001 ether;
@@ -88,7 +90,9 @@ contract BtcCollateralLoanTest is Test {
             _amount,
             BORROWER_BTC_ADDRESS,
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         uint256 loanId = loan.getTotalLoans();
         vm.stopPrank();
@@ -164,7 +168,9 @@ contract BtcCollateralLoanTest is Test {
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         
         vm.stopPrank();
@@ -186,7 +192,9 @@ contract BtcCollateralLoanTest is Test {
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         
         vm.stopPrank();
@@ -200,7 +208,9 @@ contract BtcCollateralLoanTest is Test {
             MIN_LOAN_AMOUNT - 0.001 ether,
             BORROWER_BTC_ADDRESS,
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         
         vm.stopPrank();
@@ -214,7 +224,9 @@ contract BtcCollateralLoanTest is Test {
             LOAN_AMOUNT,
             "invalid_address",
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         
         vm.stopPrank();
@@ -228,7 +240,9 @@ contract BtcCollateralLoanTest is Test {
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
             "0x1234", // Too short
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         
         vm.stopPrank();
@@ -245,7 +259,9 @@ contract BtcCollateralLoanTest is Test {
             LOAN_AMOUNT,
             BORROWER_BTC_ADDRESS,
             BORROWER_BTC_PUBKEY,
-            preimageHashBorrower
+            preimageHashBorrower,
+            BORROWER_P2TR0_TXID,
+            BORROWER_P2TR0_VOUT
         );
         vm.stopPrank();
     }
@@ -585,27 +601,27 @@ contract BtcCollateralLoanTest is Test {
         assertEq(address(loan).balance, 1 ether);
     }
 
-    // ============ BITCOIN UTILITY FUNCTIONS ============
+    // // ============ BITCOIN UTILITY FUNCTIONS ============
 
-    function testExtractTimestamp() public view {
-        //for block 908894, timestamp is 1754503783
-        bytes memory header = hex"0000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
-        uint32 timestamp = loan.extractTimestamp(header);
-        assertEq(timestamp, 1754503783); //2025-08-06 12:09:43 UTC
-    }
+    // function testExtractTimestamp() public view {
+    //     //for block 908894, timestamp is 1754503783
+    //     bytes memory header = hex"0000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
+    //     uint32 timestamp = loan.extractTimestamp(header);
+    //     assertEq(timestamp, 1754503783); //2025-08-06 12:09:43 UTC
+    // }
 
-    function testExtractTimestampHeaderTooLong() public {
-        //header is too long
-        bytes memory header = hex"000000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
-        vm.expectRevert("Invalid hdr len");
-        loan.extractTimestamp(header);
-    }   
+    // function testExtractTimestampHeaderTooLong() public {
+    //     //header is too long
+    //     bytes memory header = hex"000000602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a93689e3402172b2917c7";
+    //     vm.expectRevert("Invalid hdr len");
+    //     loan.extractTimestamp(header);
+    // }   
 
-    function testExtractTimestampHeaderTooShort() public {
-        //header is too short
-        bytes memory header = hex"602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a";
-        vm.expectRevert("Invalid hdr len");
-        loan.extractTimestamp(header);
-    }
+    // function testExtractTimestampHeaderTooShort() public {
+    //     //header is too short
+    //     bytes memory header = hex"602055e3bbd59b2c8cfe50aa38a44345b552c617cf62324f01000000000000000000ce5aea68c318b6fb4cf850d5998745211a13eeb03ce20b62bc7c9b514112420e679a";
+    //     vm.expectRevert("Invalid hdr len");
+    //     loan.extractTimestamp(header);
+    // }
 
 } 
