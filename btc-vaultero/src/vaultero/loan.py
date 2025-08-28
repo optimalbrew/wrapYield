@@ -1,6 +1,7 @@
 """
 At present, the Loan class methods are boilerplate.
-Todo: to be refined and connected to loan logic + RSK integration + app with backend DB + UI
+Unused: may not be needed as we are moving to node.js for the backend.
+But keeping it here for now (initial plan was to use python for the backend).
 """
 
 from enum import Enum

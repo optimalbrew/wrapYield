@@ -52,7 +52,7 @@ services:
       PYTHON_API_LENDER_PRIVATE_KEY: cVt4o7BGAig1UXywgGSmARhxMBkTdBNh2TdU2Rk8QmJKFKRmyBAB  # Testnet example key
       PYTHON_API_LENDER_PUBKEY: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
     volumes:
-      - ../btc-vaultero:/app/btc-vaultero:ro  # Mount btc-vaultero at runtime
+      - ../btc-vaultero/src:/app/btc-vaultero/src:ro  # Mount only btc-vaultero source code at runtime
     ports:
       - "8001:8001"
     depends_on:

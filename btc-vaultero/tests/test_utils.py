@@ -1,15 +1,9 @@
 import pytest
 from vaultero.utils import get_nums_key, get_leaf_scripts_output_0, get_leaf_scripts_output_1, get_nums_p2tr_addr_0, get_nums_p2tr_addr_1, create_collateral_lock_tx, create_collateral_release_tx
-from vaultero.setup_utils import local_setup, fund_address
-
-from bitcoinutils.setup import setup
-from bitcoinutils.proxy import NodeProxy
-from bitcoinutils.keys import PrivateKey, PublicKey
-from bitcoinutils.script import Script
-from bitcoinutils.transactions import Transaction, TxInput, TxOutput, TxWitnessInput, Sequence
+from vaultero.setup_utils import fund_address
+from bitcoinutils.transactions import TxWitnessInput, Sequence
 from bitcoinutils.utils import to_satoshis, ControlBlock
 from bitcoinutils.constants import TYPE_RELATIVE_TIMELOCK
-import hashlib
 from config.python_config import get_timelock, get_interest_rate
 
 def test_get_nums_key():

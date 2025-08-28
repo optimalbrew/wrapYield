@@ -1,3 +1,7 @@
+"""
+boilerplate. at present, no plans to publish this experimental package.
+"""
+
 try:
     import vaultero
 except ImportError as e:

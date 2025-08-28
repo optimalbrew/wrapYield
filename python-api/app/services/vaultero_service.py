@@ -4,23 +4,35 @@ This service handles all Bitcoin transaction operations for the lender/platform 
 """
 
 import sys
-import os
+from pathlib import Path
 import hashlib
 import secrets
 from typing import Dict, Any, Optional, Tuple
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Add btc-vaultero to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), '../../../btc-vaultero'))
+# Add btc-vaultero to Python path: volume mapped into the container from btc-vaultero src dir at runtime
+btc_vaultero_path = Path("/app/btc-vaultero/src")
+if str(btc_vaultero_path) not in sys.path:
+    sys.path.insert(0, str(btc_vaultero_path))
 
 try:
-    # Import btc-vaultero components (adjust imports based on actual btc-vaultero structure)
-    from bitcoin import *  # This would be your btc-vaultero imports
-    # from your_btc_vaultero_modules import create_escrow_transaction, create_collateral_transaction, etc.
+    # Import btc-vaultero components
+    from vaultero import (
+        get_nums_key,
+        get_leaf_scripts_output_0,
+        get_leaf_scripts_output_1,
+        get_nums_p2tr_addr_0,
+        get_nums_p2tr_addr_1,
+        create_collateral_lock_tx,
+        create_collateral_release_tx,
+        fund_address
+    )
+    VAULTERO_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: btc-vaultero imports failed: {e}")
     print("This service will use mock implementations for development")
+    VAULTERO_AVAILABLE = False
 
 from ..config import settings
 from ..models import (
@@ -45,6 +57,9 @@ class VaulteroService:
         self.lender_private_key = settings.lender_private_key
         self.lender_pubkey = settings.lender_pubkey
         
+        # Check if vaultero is available
+        self.vaultero_available = VAULTERO_AVAILABLE
+        
         # Initialize Bitcoin network settings
         if self.bitcoin_network == "mainnet":
             # Configure for mainnet
@@ -52,18 +67,167 @@ class VaulteroService:
         elif self.bitcoin_network == "testnet":
             # Configure for testnet  
             pass
-        else:  # regtest
+        else:   #regtest
             # Configure for regtest
             pass
     
+    def is_vaultero_available(self) -> bool:
+        """Check if vaultero library is available for use."""
+        return self.vaultero_available
+    
+    def _check_vaultero_availability(self):
+        """Raise an exception if vaultero is not available."""
+        if not self.vaultero_available:
+            raise ImportError("btc-vaultero library is not available. Please check the installation.")
+    
+    async def get_nums_key(self) -> str:
+        """Get the nums key from btc-vaultero."""
+        return get_nums_key().to_hex()
+    
+    async def get_leaf_scripts_output_0(self, borrower_pubkey: str, lender_pubkey: str, preimage_hash_borrower: str, borrower_timelock: int) -> dict:
+        """
+        Get leaf scripts for output_0 with detailed JSON formatting.
+        
+        Returns a structured response showing script construction, parameters, and hex encoding.
+        """
+        try:
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
+            # Convert string pubkeys to PublicKey objects
+            from bitcoinutils.keys import PublicKey
+            borrower_pub = PublicKey(borrower_pubkey)
+            lender_pub = PublicKey(lender_pubkey)
+            
+            # Get the scripts from vaultero
+            scripts = get_leaf_scripts_output_0(borrower_pub, lender_pub, preimage_hash_borrower, borrower_timelock)
+            
+            # Format the response
+            formatted_scripts = []
+            for i, script in enumerate(scripts):
+                script_data = {
+                    "index": i,
+                    "type": "csv_script_borrower" if i == 0 else "hashlock_and_multisig_script",
+                    "description": "Borrower escape hatch with relative timelock" if i == 0 else "Lender spending path with preimage hash and 2-of-2 multisig",
+                    "raw_script": script.script,
+                    "parameters": {
+                        "borrower_timelock": borrower_timelock,
+                        "borrower_pubkey_x_only": borrower_pub.to_x_only_hex(),
+                        "lender_pubkey_x_only": lender_pub.to_x_only_hex(),
+                        "preimage_hash_borrower": preimage_hash_borrower
+                    },
+                    "hex": script.to_hex(),
+                    "bytes_length": len(script.to_bytes()),
+                    "op_count": len(script.script)
+                }
+                
+                # Add template code based on script type
+                if i == 0:
+                    script_data["template"] = "Script([seq.for_script(), 'OP_CHECKSEQUENCEVERIFY', 'OP_DROP', borrower_pub.to_x_only_hex(), 'OP_CHECKSIG'])"
+                else:
+                    script_data["template"] = "Script(['OP_SHA256', preimage_hash_borrower, 'OP_EQUALVERIFY', lender_pub.to_x_only_hex(), 'OP_CHECKSIG', borrower_pub.to_x_only_hex(), 'OP_CHECKSIGADD', 'OP_2', 'OP_NUMEQUALVERIFY', 'OP_TRUE'])"
+                
+                formatted_scripts.append(script_data)
+            
+            return {
+                "success": True,
+                "scripts": formatted_scripts,
+                "metadata": {
+                    "total_scripts": len(scripts),
+                    "script_types": ["csv_script_borrower", "hashlock_and_multisig_script"],
+                    "function_call": f"get_leaf_scripts_output_0(borrower_pub, lender_pub, preimage_hash_borrower, borrower_timelock)",
+                    "parameters_used": {
+                        "borrower_pubkey": borrower_pubkey,
+                        "lender_pubkey": lender_pubkey,
+                        "preimage_hash_borrower": preimage_hash_borrower,
+                        "borrower_timelock": borrower_timelock
+                    },
+                    "generated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to get leaf scripts: {str(e)}")
+    
+    async def get_leaf_scripts_output_1(self, borrower_pubkey: str, lender_pubkey: str, preimage_hash_lender: str, lender_timelock: int) -> dict:
+        """
+        Get leaf scripts for output_1 with detailed JSON formatting.
+        
+        Returns a structured response showing script construction, parameters, and hex encoding.
+        """
+        try:
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
+            # Convert string pubkeys to PublicKey objects
+            from bitcoinutils.keys import PublicKey
+            borrower_pub = PublicKey(borrower_pubkey)
+            lender_pub = PublicKey(lender_pubkey)
+            
+            # Get the scripts from vaultero
+            scripts = get_leaf_scripts_output_1(borrower_pub, lender_pub, preimage_hash_lender, lender_timelock)
+            
+            # Format the response
+            formatted_scripts = []
+            for i, script in enumerate(scripts):
+                script_data = {
+                    "index": i,
+                    "type": "csv_script_lender" if i == 0 else "hashlock_and_borrower_siglock_script",
+                    "description": "Lender gets collateral after timelock" if i == 0 else "Borrower regains custody of collateral with preimage",
+                    "raw_script": script.script,
+                    "parameters": {
+                        "lender_timelock": lender_timelock,
+                        "borrower_pubkey_x_only": borrower_pub.to_x_only_hex(),
+                        "lender_pubkey_x_only": lender_pub.to_x_only_hex(),
+                        "preimage_hash_lender": preimage_hash_lender
+                    },
+                    "hex": script.to_hex(),
+                    "bytes_length": len(script.to_bytes()),
+                    "op_count": len(script.script)
+                }
+                
+                # Add template code based on script type
+                if i == 0:
+                    script_data["template"] = "Script([seq.for_script(), 'OP_CHECKSEQUENCEVERIFY', 'OP_DROP', lender_pub.to_x_only_hex(), 'OP_CHECKSIG'])"
+                else:
+                    script_data["template"] = "Script(['OP_SHA256', preimage_hash_lender, 'OP_EQUALVERIFY', borrower_pub.to_x_only_hex(), 'OP_CHECKSIG'])"
+                
+                formatted_scripts.append(script_data)
+            
+            return {
+                "success": True,
+                "scripts": formatted_scripts,
+                "metadata": {
+                    "total_scripts": len(scripts),
+                    "script_types": ["csv_script_lender", "hashlock_and_borrower_siglock_script"],
+                    "function_call": f"get_leaf_scripts_output_1(borrower_pub, lender_pub, preimage_hash_lender, lender_timelock)",
+                    "parameters_used": {
+                        "borrower_pubkey": borrower_pubkey,
+                        "lender_pubkey": lender_pubkey,
+                        "preimage_hash_lender": preimage_hash_lender,
+                        "lender_timelock": lender_timelock
+                    },
+                    "generated_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to get leaf scripts: {str(e)}")
+
     async def create_escrow_transaction(self, request: CreateEscrowRequest) -> EscrowTransactionResponse:
         """
         Create Bitcoin escrow transaction where borrower deposits collateral.
         This creates the initial escrow that both parties can spend under different conditions.
         """
         try:
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
             # Use btc-vaultero to create escrow transaction
             # This is a placeholder - you'll need to adapt to your actual btc-vaultero API
+            # For example:
+            # escrow_address = get_nums_p2tr_addr_0(...)
+            # raw_tx = create_collateral_lock_tx(...)
             
             # For now, using mock implementation
             transaction_result = await self._mock_create_escrow(
@@ -84,6 +248,26 @@ class VaulteroService:
                 script_details=transaction_result.get("script_details", {})
             )
             
+        except ImportError as e:
+            # Vaultero not available, use mock
+            print(f"Using mock implementation: {e}")
+            transaction_result = await self._mock_create_escrow(
+                borrower_pubkey=request.borrower_pubkey,
+                lender_pubkey=self.lender_pubkey,
+                preimage_hash=request.preimage_hash_borrower,
+                timelock=request.borrower_timelock,
+                amount=request.amount,
+                fee=request.origination_fee
+            )
+            
+            return EscrowTransactionResponse(
+                transaction_id=f"escrow_{request.loan_id}",
+                raw_tx=transaction_result["raw_tx"],
+                escrow_address=transaction_result["escrow_address"],
+                input_amount=transaction_result.get("input_amount"),
+                fee=transaction_result.get("fee"),
+                script_details=transaction_result.get("script_details", {})
+            )
         except Exception as e:
             raise Exception(f"Failed to create escrow transaction: {str(e)}")
     

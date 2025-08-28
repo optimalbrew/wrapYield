@@ -86,6 +86,7 @@ async def health_check():
         logger.error("Health check failed", error=str(e))
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
+
 # Root endpoint
 @app.get("/")
 async def root():
@@ -93,10 +94,15 @@ async def root():
     return {
         "service": "BTC Yield Python API",
         "version": "1.0.0",
-        "description": "Bitcoin transaction service for lender operations",
+        "description": "Bitcoin transaction service for BTC collateralized lending",
         "bitcoin_network": settings.bitcoin_network,
         "endpoints": {
             "health": "/health",
+                                "vaultero": {
+                        "nums_key": "GET /vaultero/nums-key",
+                        "leaf_scripts_output_0": "POST /vaultero/leaf-scripts-output-0",
+                        "leaf_scripts_output_1": "POST /vaultero/leaf-scripts-output-1"
+                    },
             "transactions": {
                 "create_escrow": "POST /transactions/escrow",
                 "create_collateral": "POST /transactions/collateral",
@@ -112,6 +118,94 @@ async def root():
             }
         }
     }
+
+# Test vaultero get_nums_key endpoint
+@app.get("/vaultero/nums-key")
+async def get_nums_key():
+    """Get the NUMS key from btc-vaultero for testing purposes."""
+    try:
+        nums_key_hex = await vaultero_service.get_nums_key()
+        return {
+            "success": True,
+            "nums_key_hex": nums_key_hex,
+            "message": "NUMS key retrieved successfully"
+        }
+    except Exception as e:
+        logger.error("Failed to get NUMS key", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get NUMS key: {str(e)}"
+        )
+
+# Test vaultero get_leaf_scripts_output_0 endpoint
+@app.post("/vaultero/leaf-scripts-output-0")
+async def get_leaf_scripts_output_0(request: dict):
+    """Get leaf scripts for output_0 with detailed JSON formatting."""
+    try:
+        # Extract parameters from request
+        borrower_pubkey = request.get("borrower_pubkey")
+        lender_pubkey = request.get("lender_pubkey") 
+        preimage_hash_borrower = request.get("preimage_hash_borrower")
+        borrower_timelock = request.get("borrower_timelock", 144)
+        
+        # Validate required parameters
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_borrower]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_borrower"
+            )
+        
+        # Get the scripts
+        result = await vaultero_service.get_leaf_scripts_output_0(
+            borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get leaf scripts", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get leaf scripts: {str(e)}"
+        )
+
+
+# Test vaultero get_leaf_scripts_output_1 endpoint
+@app.post("/vaultero/leaf-scripts-output-1")
+async def get_leaf_scripts_output_1(request: dict):
+    """Get leaf scripts for output_1 with detailed JSON formatting."""
+    try:
+        # Extract parameters from request
+        borrower_pubkey = request.get("borrower_pubkey")
+        lender_pubkey = request.get("lender_pubkey") 
+        preimage_hash_lender = request.get("preimage_hash_lender")
+        lender_timelock = request.get("lender_timelock", 144)
+        
+        # Validate required parameters
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_lender]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_lender"
+            )
+        
+        # Get the scripts
+        result = await vaultero_service.get_leaf_scripts_output_1(
+            borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get leaf scripts", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get leaf scripts: {str(e)}"
+        )
+
 
 # Transaction Endpoints
 

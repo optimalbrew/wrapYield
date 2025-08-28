@@ -8,14 +8,18 @@ setup("regtest")
 def local_setup(proxy: NodeProxy):
     # Setup the Bitcoin node connecti
     try:
+        #check if wallet exists
+        wallets = proxy.listwallets()
+        
+        if not wallets or 'mywallet' not in wallets:
+            print("Wallet 'mywallet' not found. Creating it.")
+            proxy.createwallet('mywallet')
+        else:
+            print("Wallet 'mywallet' found. Loading it.")
         proxy.loadwallet('mywallet')
         print('Loaded mywallet')
-    except:
-        try:
-            print("Loading failed. Try creating wallet 'mywallet'.")
-            proxy.createwallet('mywallet')
-        except:
-            print("Error creating wallet 'mywallet'")
+    except Exception as e:
+        print(f"Error creating or loading wallet 'mywallet': {e}")
 
     # Generate some initial coins
     addr = proxy.getnewaddress("first_address", "bech32")

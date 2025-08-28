@@ -10,6 +10,7 @@ The 2nd tx will spend the output from the 1st tx in two ways:
 1. Bob with a relative timelock
 2. or by Alice with a preimage (hashlock script)
 
+Was used just to test the flow
 """
 
 from bitcoinutils.setup import setup

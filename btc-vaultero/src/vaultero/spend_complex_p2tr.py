@@ -7,6 +7,8 @@ Start with spend_p2tr_four_scripts_by_script_path.py
 * then add a script path that is a hashlock and a siglock ✅    
 * then add a script path that is both a hashlock and a multisig ✅
 
+used to test the construction and spending of the P2TR contracts we want for the vault / BTC loan use case
+
 """
 
 from bitcoinutils.setup import setup

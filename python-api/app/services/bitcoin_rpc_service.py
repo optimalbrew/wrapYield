@@ -24,6 +24,7 @@ class BitcoinRPCService:
             f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/"
         )
         self._rpc_connection = None
+        self._wallet_initialized = False
     
     @property
     def rpc(self) -> AuthServiceProxy:
@@ -37,11 +38,100 @@ class BitcoinRPCService:
                 # Test connection
                 self._rpc_connection.getblockchaininfo()
                 logger.info(f"Connected to Bitcoin Core ({settings.bitcoin_network})")
+                
+                # Initialize wallet if not already done
+                if not self._wallet_initialized:
+                    self._initialize_wallet()
+                    
             except Exception as e:
                 logger.error(f"Failed to connect to Bitcoin Core: {e}")
                 raise ConnectionError(f"Cannot connect to Bitcoin Core: {e}")
         
         return self._rpc_connection
+    
+    def _initialize_wallet(self):
+        """Initialize wallet for testing if none exists."""
+        try:
+            # Check if any wallets exist
+            wallets = self._rpc_connection.listwallets()
+            
+            if not wallets:
+                # No wallets exist, create a new one
+                logger.info("No wallets found, creating 'py-api-test' wallet")
+                self._rpc_connection.createwallet("py-api-test")
+                self._wallet_initialized = True
+                logger.info("Successfully created 'py-api-test' wallet")
+                
+            elif "py-api-test" not in wallets:
+                # py-api-test wallet doesn't exist, create it
+                logger.info("Creating 'py-api-test' wallet")
+                self._rpc_connection.createwallet("py-api-test")
+                self._wallet_initialized = True
+                logger.info("Successfully created 'py-api-test' wallet")
+                
+            else:
+                # py-api-test wallet exists, load it
+                logger.info("Loading existing 'py-api-test' wallet")
+                self._rpc_connection.loadwallet("py-api-test")
+                self._wallet_initialized = True
+                logger.info("Successfully loaded 'py-api-test' wallet")
+            
+            # Generate some initial blocks if we're in regtest and have no blocks
+            if settings.bitcoin_network == "regtest":
+                self._ensure_initial_blocks()
+                
+        except JSONRPCException as e:
+            if e.error['code'] == -4:  # Wallet already loaded
+                logger.info("Wallet 'py-api-test' is already loaded")
+                self._wallet_initialized = True
+            elif e.error['code'] == -35:  # Wallet already exists
+                logger.info("Wallet 'py-api-test' already exists, loading it")
+                try:
+                    self._rpc_connection.loadwallet("py-api-test")
+                    self._wallet_initialized = True
+                    logger.info("Successfully loaded existing 'py-api-test' wallet")
+                except JSONRPCException as load_error:
+                    logger.error(f"Failed to load existing wallet: {load_error}")
+                    raise
+            else:
+                logger.error(f"Failed to initialize wallet: {e}")
+                raise
+        except Exception as e:
+            logger.error(f"Unexpected error during wallet initialization: {e}")
+            raise
+    
+    def _ensure_initial_blocks(self):
+        """Ensure we have some initial blocks and coins for testing."""
+        try:
+            # Check current block count
+            blockchain_info = self._rpc_connection.getblockchaininfo()
+            current_blocks = blockchain_info.get('blocks', 0)
+            
+            if current_blocks == 0:
+                logger.info("No blocks found, generating 101 initial blocks for testing")
+                # Generate 101 blocks to ensure coinbase transactions are spendable
+                # First get an address from our wallet
+                test_address = self._rpc_connection.getnewaddress("test")
+                block_hashes = self._rpc_connection.generatetoaddress(101, test_address)
+                logger.info(f"Generated {len(block_hashes)} initial blocks")
+                
+                # Check balance
+                balance = self._rpc_connection.getbalance()
+                logger.info(f"Wallet balance after block generation: {balance} BTC")
+                
+            elif current_blocks < 101:
+                logger.info(f"Only {current_blocks} blocks found, generating additional blocks for testing")
+                test_address = self._rpc_connection.getnewaddress("test")
+                blocks_needed = 101 - current_blocks
+                block_hashes = self._rpc_connection.generatetoaddress(blocks_needed, test_address)
+                logger.info(f"Generated {len(block_hashes)} additional blocks")
+                
+            else:
+                logger.info(f"Sufficient blocks available: {current_blocks}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to ensure initial blocks: {e}")
+            # Don't fail the entire initialization for this
     
     async def get_blockchain_info(self) -> Dict:
         """Get general blockchain information."""

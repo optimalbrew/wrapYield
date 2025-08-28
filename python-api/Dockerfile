@@ -23,6 +23,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ ./app/
 
+# Copy only the source code from btc-vaultero (avoid virtual environment, tests, etc.)
+# COPY ../btc-vaultero/src/ ./btc-vaultero/src/
+
+# Copy tests directory for running tests inside container
+# Tests are now under 'app' directory, so "app" can be imported in the tests as module
+# COPY tests/ ./tests/
+
+# Copy pytest configuration
+COPY pytest.ini .
+
 # Note: btc-vaultero will be mounted at runtime or copied separately
 # COPY ../btc-vaultero/ ./btc-vaultero/
 

@@ -1,6 +1,7 @@
 """
 Utility functions for the vaultero project.
-Alice is borrower, Bob is lender (aka VMgr or vault manager).
+Alice is borrower, Bob is lender (aka VMgr or vault manager). These references were used in the original code. 
+Now trying to use the terms borrower and lender.
 """
 from bitcoinutils.proxy import NodeProxy
 from bitcoinutils.keys import PublicKey, PrivateKey
@@ -24,7 +25,7 @@ def get_nums_key():
     nums_hex = "0250929b74c1a04954b78b4b60c595c211f8b853e6e84bfa2be95712a7b0dd59e6"
     return PublicKey.from_hex(nums_hex)
 
-#replace alice with borrower, bob with lender
+
 def get_leaf_scripts_output_0(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int ):
     """
     Returns the leaf scripts for the output_0.
@@ -78,20 +79,21 @@ def get_leaf_scripts_output_1(borrower_pub: PublicKey, lender_pub: PublicKey, pr
     # borrower's escape hatch: 144 blocks is 1 day
     seq = Sequence(TYPE_RELATIVE_TIMELOCK, lender_timelock)
 
-    # borrower can regain collateral if lender accepts repayment and reveals the preimage hash
-    hashlock_and_borrower_siglock_script = Script([ 
-        'OP_SHA256',
-        preimage_hash_lender,
-        'OP_EQUALVERIFY',
-        borrower_pub.to_x_only_hex(),
-        'OP_CHECKSIG'
-    ])
     # on default, lender can spend it after a timelock
     csv_script_lender = Script([
         seq.for_script(),
         'OP_CHECKSEQUENCEVERIFY',
         'OP_DROP',
         lender_pub.to_x_only_hex(),
+        'OP_CHECKSIG'
+    ])
+
+    # borrower can regain collateral if lender accepts repayment and reveals the preimage hash
+    hashlock_and_borrower_siglock_script = Script([ 
+        'OP_SHA256',
+        preimage_hash_lender,
+        'OP_EQUALVERIFY',
+        borrower_pub.to_x_only_hex(),
         'OP_CHECKSIG'
     ])
     return [csv_script_lender, hashlock_and_borrower_siglock_script]
@@ -134,7 +136,7 @@ def get_nums_p2tr_addr_1(borrower_pub: PublicKey, lender_pub: PublicKey, preimag
 def dummy_create_escrow_output(borrower_pub: PublicKey, lender_pub: PublicKey, preimage_hash_borrower: str, borrower_timelock: int):
     """
     Dummy method. Does NOT create the escrow output. The borrower (or anyone on their behalf)
-    simply needs to compute the p2tr address and send funds to it.
+    simply needs to compute the p2tr_0 address and send funds to it.
     
     """
     print(f"Send loan amount + any up front fees to P2TR address: {get_nums_p2tr_addr_0(borrower_pub, lender_pub, preimage_hash_borrower, borrower_timelock)}")

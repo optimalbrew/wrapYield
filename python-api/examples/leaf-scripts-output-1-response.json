@@ -1,0 +1,64 @@
+{
+  "success": true,
+  "scripts": [
+    {
+      "index": 0,
+      "type": "csv_script_lender",
+      "description": "Lender gets collateral after timelock",
+      "raw_script": [
+        27150,
+        "OP_CHECKSEQUENCEVERIFY",
+        "OP_DROP",
+        "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+        "OP_CHECKSIG"
+      ],
+      "parameters": {
+        "lender_timelock": 27150,
+        "borrower_pubkey_x_only": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+        "lender_pubkey_x_only": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+        "preimage_hash_lender": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3"
+      },
+      "hex": "020e6ab2752064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac",
+      "bytes_length": 39,
+      "op_count": 5,
+      "template": "Script([seq.for_script(), 'OP_CHECKSEQUENCEVERIFY', 'OP_DROP', lender_pub.to_x_only_hex(), 'OP_CHECKSIG'])"
+    },
+    {
+      "index": 1,
+      "type": "hashlock_and_borrower_siglock_script",
+      "description": "Borrower regains custody of collateral with preimage",
+      "raw_script": [
+        "OP_SHA256",
+        "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+        "OP_EQUALVERIFY",
+        "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+        "OP_CHECKSIG"
+      ],
+      "parameters": {
+        "lender_timelock": 27150,
+        "borrower_pubkey_x_only": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+        "lender_pubkey_x_only": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+        "preimage_hash_lender": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3"
+      },
+      "hex": "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e38820274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaac",
+      "bytes_length": 69,
+      "op_count": 5,
+      "template": "Script(['OP_SHA256', preimage_hash_lender, 'OP_EQUALVERIFY', borrower_pub.to_x_only_hex(), 'OP_CHECKSIG'])"
+    }
+  ],
+  "metadata": {
+    "total_scripts": 2,
+    "script_types": [
+      "csv_script_lender",
+      "hashlock_and_borrower_siglock_script"
+    ],
+    "function_call": "get_leaf_scripts_output_1(borrower_pub, lender_pub, preimage_hash_lender, lender_timelock)",
+    "parameters_used": {
+      "borrower_pubkey": "02274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+      "lender_pubkey": "0264b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+      "preimage_hash_lender": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+      "lender_timelock": 27150
+    },
+    "generated_at": "2025-08-28T04:50:08.591899+00:00"
+  }
+}
