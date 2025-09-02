@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any, List
 from decimal import Decimal
 
@@ -15,35 +15,13 @@ class APIResponse(BaseModel):
     error: Optional[str] = None
     message: Optional[str] = None
 
-# Escrow Transaction Models
-class CreateEscrowRequest(BaseModel):
-    loan_id: str = Field(..., description="UUID of the loan")
-    borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey (64 chars hex)")
-    preimage_hash_borrower: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of borrower's preimage")
-    borrower_timelock: int = Field(..., gt=0, description="Borrower timelock in Bitcoin blocks")
-    amount: Decimal = Field(..., gt=0, description="Escrow amount in BTC")
-    origination_fee: Optional[Decimal] = Field(default=Decimal("0.001"), description="Origination fee in BTC")
-    
-    @validator('borrower_pubkey', 'preimage_hash_borrower')
-    def validate_hex_string(cls, v):
-        if not all(c in '0123456789abcdefABCDEF' for c in v):
-            raise ValueError('Must be valid hexadecimal string')
-        return v.lower()
-
-class EscrowTransactionResponse(BaseModel):
-    transaction_id: str
-    raw_tx: str = Field(..., description="Raw transaction hex")
-    escrow_address: str = Field(..., description="P2TR escrow address")
-    input_amount: Optional[Decimal] = None
-    fee: Optional[Decimal] = None
-    script_details: Dict[str, Any] = Field(default_factory=dict)
-
 # Collateral Transaction Models  
 class CreateCollateralRequest(BaseModel):
     loan_id: str = Field(..., description="UUID of the loan")
     escrow_txid: str = Field(..., min_length=64, max_length=64, description="Escrow transaction ID")
     escrow_vout: int = Field(default=0, ge=0, description="Escrow transaction output index")
     borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
+    lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
     preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
     lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
     collateral_amount: Decimal = Field(..., gt=0, description="Collateral amount in BTC")
@@ -55,6 +33,27 @@ class CollateralTransactionResponse(BaseModel):
     collateral_address: str = Field(..., description="P2TR collateral address")
     fee: Optional[Decimal] = None
     script_details: Dict[str, Any] = Field(default_factory=dict)
+
+# Separate Signature Models
+class BorrowerSignatureRequest(BaseModel):
+    """Request model for generating borrower signature"""
+    loan_id: str = Field(..., description="UUID of the loan")
+    escrow_txid: str = Field(..., min_length=64, max_length=64, description="Escrow transaction ID")
+    escrow_vout: int = Field(default=0, ge=0, description="Escrow transaction output index")
+    borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
+    lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
+    preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
+    lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
+    collateral_amount: str = Field(..., description="Collateral amount in BTC")
+    origination_fee: Optional[str] = Field(default="0.001", description="Origination fee in BTC")
+    borrower_private_key: str = Field(..., description="Borrower's private key in WIF format")
+
+class LenderWitnessRequest(BaseModel):
+    """Request model for completing lender witness"""
+    signature_file_path: str = Field(..., description="Path to the JSON file containing borrower's signature")
+    lender_private_key: str = Field(..., description="Lender's private key in WIF format")
+    preimage: str = Field(..., description="The preimage that satisfies the hashlock")
+    mine_block: bool = Field(default=True, description="Whether to mine a block after broadcasting")
 
 # Signature Models
 class SignTransactionRequest(BaseModel):

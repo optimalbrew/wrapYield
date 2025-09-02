@@ -98,14 +98,17 @@ async def root():
         "bitcoin_network": settings.bitcoin_network,
         "endpoints": {
             "health": "/health",
-                                "vaultero": {
+            "vaultero": {
                         "nums_key": "GET /vaultero/nums-key",
                         "leaf_scripts_output_0": "POST /vaultero/leaf-scripts-output-0",
-                        "leaf_scripts_output_1": "POST /vaultero/leaf-scripts-output-1"
+                        "leaf_scripts_output_1": "POST /vaultero/leaf-scripts-output-1",
+                        "nums_p2tr_addr_0": "POST /vaultero/nums-p2tr-addr-0",
+                        "nums_p2tr_addr_1": "POST /vaultero/nums-p2tr-addr-1"
                     },
             "transactions": {
-                "create_escrow": "POST /transactions/escrow",
                 "create_collateral": "POST /transactions/collateral",
+                "borrower_signature": "POST /transactions/borrower-signature",
+                "complete_witness": "POST /transactions/complete-witness",
                 "sign": "POST /transactions/sign",
                 "broadcast": "POST /transactions/broadcast",
                 "status": "GET /transactions/{txid}/status"
@@ -146,13 +149,13 @@ async def get_leaf_scripts_output_0(request: dict):
         borrower_pubkey = request.get("borrower_pubkey")
         lender_pubkey = request.get("lender_pubkey") 
         preimage_hash_borrower = request.get("preimage_hash_borrower")
-        borrower_timelock = request.get("borrower_timelock", 144)
+        borrower_timelock = request.get("borrower_timelock")
         
         # Validate required parameters
-        if not all([borrower_pubkey, lender_pubkey, preimage_hash_borrower]):
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock]):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_borrower"
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock"
             )
         
         # Get the scripts
@@ -181,13 +184,13 @@ async def get_leaf_scripts_output_1(request: dict):
         borrower_pubkey = request.get("borrower_pubkey")
         lender_pubkey = request.get("lender_pubkey") 
         preimage_hash_lender = request.get("preimage_hash_lender")
-        lender_timelock = request.get("lender_timelock", 144)
+        lender_timelock = request.get("lender_timelock")
         
         # Validate required parameters
-        if not all([borrower_pubkey, lender_pubkey, preimage_hash_lender]):
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock]):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_lender"
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock"
             )
         
         # Get the scripts
@@ -206,50 +209,188 @@ async def get_leaf_scripts_output_1(request: dict):
             detail=f"Failed to get leaf scripts: {str(e)}"
         )
 
+# Test vaultero get_nums_p2tr_addr_0 endpoint
+@app.post("/vaultero/nums-p2tr-addr-0")
+async def get_nums_p2tr_addr_0(request: dict):
+    """Get NUMS P2TR address for output_0."""
+    try:
+        # Extract parameters from request
+        borrower_pubkey = request.get("borrower_pubkey")
+        lender_pubkey = request.get("lender_pubkey") 
+        preimage_hash_borrower = request.get("preimage_hash_borrower")
+        borrower_timelock = request.get("borrower_timelock")
+        
+        # Validate required parameters
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock"
+            )
+        
+        # Get the NUMS P2TR address
+        result = await vaultero_service.get_nums_p2tr_addr_0(
+            borrower_pubkey, lender_pubkey, preimage_hash_borrower, borrower_timelock
+        )
+        
+        return {
+            "success": True,
+            "nums_p2tr_addr": result,
+            "message": "NUMS P2TR address retrieved successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get NUMS P2TR address", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get NUMS P2TR address: {str(e)}"
+        )
+
+# Test vaultero get_nums_p2tr_addr_1 endpoint
+@app.post("/vaultero/nums-p2tr-addr-1")
+async def get_nums_p2tr_addr_1(request: dict):
+    """Get NUMS P2TR address for output_1."""
+    try:
+        # Extract parameters from request
+        borrower_pubkey = request.get("borrower_pubkey")
+        lender_pubkey = request.get("lender_pubkey") 
+        preimage_hash_lender = request.get("preimage_hash_lender")
+        lender_timelock = request.get("lender_timelock")
+        
+        # Validate required parameters
+        if not all([borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing required parameters: borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock"
+            )
+        
+        # Get the NUMS P2TR address
+        result = await vaultero_service.get_nums_p2tr_addr_1(
+            borrower_pubkey, lender_pubkey, preimage_hash_lender, lender_timelock
+        )
+        
+        return {
+            "success": True,
+            "nums_p2tr_addr": result,
+            "message": "NUMS P2TR address retrieved successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Failed to get NUMS P2TR address", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get NUMS P2TR address: {str(e)}"
+        )
+
 
 # Transaction Endpoints
 
-@app.post("/transactions/escrow", response_model=APIResponse)
-async def create_escrow_transaction(request: CreateEscrowRequest):
+@app.post("/transactions/borrower-signature", response_model=APIResponse)
+async def generate_borrower_signature(request: BorrowerSignatureRequest):
     """
-    Create Bitcoin escrow transaction for loan collateral.
+    Generate borrower's signature for collateral transaction and save to JSON file.
     
-    This creates the initial transaction where borrower deposits Bitcoin collateral
-    that can be spent under different conditions by borrower or lender.
+    This endpoint allows the borrower to sign the collateral transaction offline
+    and save their signature to a JSON file that can be shared with the lender.
     """
     try:
         logger.info(
-            "Creating escrow transaction",
+            "Generating borrower signature",
             loan_id=request.loan_id,
-            amount=str(request.amount),
-            borrower_pubkey=request.borrower_pubkey[:16] + "..."
+            escrow_txid=request.escrow_txid
         )
         
-        result = await vaultero_service.create_escrow_transaction(request)
+        # Convert request to CreateCollateralRequest for the service method
+        collateral_request = CreateCollateralRequest(
+            loan_id=request.loan_id,
+            escrow_txid=request.escrow_txid,
+            escrow_vout=request.escrow_vout,
+            borrower_pubkey=request.borrower_pubkey,
+            lender_pubkey=request.lender_pubkey,
+            preimage_hash_lender=request.preimage_hash_lender,
+            lender_timelock=request.lender_timelock,
+            collateral_amount=request.collateral_amount,
+            origination_fee=request.origination_fee
+        )
+        
+        signature_file_path = await vaultero_service.generate_borrower_signature(
+            collateral_request, request.borrower_private_key
+        )
         
         logger.info(
-            "Escrow transaction created successfully",
+            "Borrower signature generated successfully",
             loan_id=request.loan_id,
-            transaction_id=result.transaction_id,
-            escrow_address=result.escrow_address
+            signature_file=signature_file_path
         )
         
         return APIResponse(
             success=True,
-            data=result.dict(),
-            message="Escrow transaction created successfully"
+            data={
+                "signature_file_path": signature_file_path,
+                "loan_id": request.loan_id,
+                "message": "Borrower signature saved to file"
+            },
+            message="Borrower signature generated and saved successfully"
         )
         
     except Exception as e:
         logger.error(
-            "Failed to create escrow transaction",
+            "Failed to generate borrower signature",
             loan_id=request.loan_id,
             error=str(e),
             traceback=traceback.format_exc()
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create escrow transaction: {str(e)}"
+            detail=f"Failed to generate borrower signature: {str(e)}"
+        )
+
+@app.post("/transactions/complete-witness", response_model=APIResponse)
+async def complete_lender_witness(request: LenderWitnessRequest):
+    """
+    Complete the transaction witness using borrower's signature and lender's signature + preimage.
+    
+    This endpoint reads the borrower's signature from a JSON file, generates the lender's
+    signature, adds the preimage, and broadcasts the completed transaction.
+    """
+    try:
+        logger.info(
+            "Completing lender witness",
+            signature_file=request.signature_file_path
+        )
+        
+        txid = await vaultero_service.complete_lender_witness(
+            request.signature_file_path, request.lender_private_key, request.preimage, request.mine_block
+        )
+        
+        logger.info(
+            "Lender witness completed successfully",
+            txid=txid
+        )
+        
+        return APIResponse(
+            success=True,
+            data={
+                "txid": txid,
+                "signature_file_path": request.signature_file_path,
+                "message": "Transaction broadcast successfully"
+            },
+            message="Lender witness completed and transaction broadcast successfully"
+        )
+        
+    except Exception as e:
+        logger.error(
+            "Failed to complete lender witness",
+            signature_file=request.signature_file_path,
+            error=str(e),
+            traceback=traceback.format_exc()
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to complete lender witness: {str(e)}"
         )
 
 @app.post("/transactions/collateral", response_model=APIResponse)
@@ -706,33 +847,7 @@ if settings.log_level == "debug":
             "transaction_timeout": settings.transaction_timeout
         }
     
-    @app.post("/debug/mock-transaction")
-    async def debug_mock_transaction():
-        """Debug endpoint to test transaction creation without btc-vaultero"""
-        try:
-            # Create a mock escrow transaction for testing
-            mock_request = CreateEscrowRequest(
-                loan_id="debug-loan-123",
-                borrower_pubkey="a" * 64,
-                preimage_hash_borrower="b" * 64,
-                borrower_timelock=144,  # ~24 hours
-                amount=Decimal("0.001"),
-                origination_fee=Decimal("0.0001")
-            )
-            
-            result = await vaultero_service.create_escrow_transaction(mock_request)
-            
-            return APIResponse(
-                success=True,
-                data=result.dict(),
-                message="Mock transaction created successfully"
-            )
-            
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Mock transaction failed: {str(e)}"
-            )
+
 
 if __name__ == "__main__":
     import uvicorn

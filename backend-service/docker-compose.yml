@@ -53,6 +53,7 @@ services:
       PYTHON_API_LENDER_PUBKEY: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
     volumes:
       - ../btc-vaultero/src:/app/btc-vaultero/src:ro  # Mount only btc-vaultero source code at runtime
+      - ../python-api/examples:/app/examples  # Mount examples directory for signature files
     ports:
       - "8001:8001"
     depends_on:

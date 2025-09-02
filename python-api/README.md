@@ -80,7 +80,7 @@ docker compose stop python-api && docker compose build python-api && docker comp
 
 Run tests with
 ```bash
-docker exec btc-yield-python-api pytest -v
+docker 
 ```
 
 ### Current Status

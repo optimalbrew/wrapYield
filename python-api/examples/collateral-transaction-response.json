@@ -1,0 +1,21 @@
+{
+  "success": true,
+  "data": {
+    "transaction_id": "collateral_api-test-loan-123",
+    "raw_tx": "0200000000010135d3bbd4c51c5dd6a6bc4a9fc2fb5e05cfbeb6a3e50554e9e7ddedf35875a0c80100000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388aca086010000000000225120933372a9f0cd86c0a40cac9cbbd2322acb3e3ecc507034eca141b8d876e9c7da00000000",
+    "collateral_address": "bcrt1pjveh920sekrvpfqv4jwth53j9t9nu0kv2pcrfm9pgxudsahfcldq9xfxcs",
+    "fee": "0.001",
+    "script_details": {
+      "escrow_txid": "c8a07558f3eddde7e95405e5a3b6becf055efbc29f4abca6d65d1cc5d4bbd335",
+      "escrow_vout": 1,
+      "input_amount": "0.00210000",
+      "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+      "preimage_hash_lender": "fdcaa91eae3da24f7298c2812b6926635daac1c16cb7aabc4c4ffec59207c75c",
+      "lender_timelock": 144,
+      "collateral_amount": 0.001,
+      "origination_fee": 0.001
+    }
+  },
+  "error": null,
+  "message": "Collateral transaction created successfully"
+}

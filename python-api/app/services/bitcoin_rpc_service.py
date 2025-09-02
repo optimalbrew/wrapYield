@@ -217,7 +217,9 @@ class BitcoinRPCService:
             if address:
                 block_hashes = self.rpc.generatetoaddress(num_blocks, address)
             else:
-                block_hashes = self.rpc.generate(num_blocks)
+                # Use generatetoaddress with a new address since generate is deprecated
+                new_address = self.rpc.getnewaddress()
+                block_hashes = self.rpc.generatetoaddress(num_blocks, new_address)
             
             logger.info(f"Generated {num_blocks} blocks")
             return block_hashes
