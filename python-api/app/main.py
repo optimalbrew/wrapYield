@@ -109,7 +109,9 @@ async def root():
                 "create_collateral": "POST /transactions/collateral",
                 "borrower_signature": "POST /transactions/borrower-signature",
                 "complete_witness": "POST /transactions/complete-witness",
-                "sign": "POST /transactions/sign",
+                "borrower_exit": "POST /transactions/borrower-exit",
+                "collateral_release": "POST /transactions/collateral-release",
+                "collateral_capture": "POST /transactions/collateral-capture",
                 "broadcast": "POST /transactions/broadcast",
                 "status": "GET /transactions/{txid}/status"
             },
@@ -435,46 +437,147 @@ async def create_collateral_transaction(request: CreateCollateralRequest):
             detail=f"Failed to create collateral transaction: {str(e)}"
         )
 
-@app.post("/transactions/sign", response_model=APIResponse)
-async def sign_transaction(request: SignTransactionRequest):
+@app.post("/transactions/borrower-exit", response_model=APIResponse)
+async def borrower_exit_escrow(request: BorrowerExitEscrowRequest):
     """
-    Sign a Bitcoin transaction using lender's private key.
+    Create, sign, and broadcast Bitcoin transaction for borrower to exit escrow without revealing preimage.
     
-    This endpoint is used when the lender needs to provide their signature
-    for escrow, collateral, or settlement transactions.
+    This endpoint allows the borrower to reclaim their funds if the loan is not offered
+    or not claimed by the lender. Uses CSV (CheckSequenceVerify) script path.
+    The transaction is immediately broadcast to the network.
     """
     try:
         logger.info(
-            "Signing transaction",
+            "Executing borrower exit escrow",
             loan_id=request.loan_id,
-            transaction_type=request.transaction_type,
-            input_amount=str(request.input_amount)
+            escrow_txid=request.escrow_txid,
+            exit_address=request.exit_address
         )
         
-        result = await vaultero_service.sign_transaction(request)
+        txid = await vaultero_service.borrower_exit_escrow(request)
         
         logger.info(
-            "Transaction signed successfully",
+            "Borrower exit escrow completed successfully",
             loan_id=request.loan_id,
-            signature_length=len(result.signature)
+            txid=txid
         )
         
         return APIResponse(
             success=True,
-            data=result.dict(),
-            message="Transaction signed successfully"
+            data={
+                "txid": txid,
+                "loan_id": request.loan_id,
+                "exit_address": request.exit_address,
+                "message": "Borrower exit escrow completed and transaction broadcast successfully"
+            },
+            message="Borrower exit escrow completed successfully"
         )
         
     except Exception as e:
         logger.error(
-            "Failed to sign transaction",
+            "Failed to execute borrower exit escrow",
             loan_id=request.loan_id,
             error=str(e),
             traceback=traceback.format_exc()
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sign transaction: {str(e)}"
+            detail=f"Failed to execute borrower exit escrow: {str(e)}"
+        )
+
+@app.post("/transactions/collateral-release", response_model=APIResponse)
+async def collateral_release(request: CollateralReleaseRequest):
+    """
+    Create, sign, and broadcast Bitcoin transaction to release collateral to borrower.
+
+    This endpoint allows the borrower to retrieve their collateral when the lender 
+    accepts loan repayment and reveals their preimage on RSK. Uses hashlock + siglock 
+    script path with lender's preimage. The transaction is immediately broadcast to the network.
+    """
+    try:
+        logger.info(
+            "Executing collateral release",
+            loan_id=request.loan_id,
+            collateral_txid=request.collateral_txid
+        )
+
+        txid = await vaultero_service.collateral_release(request)
+
+        logger.info(
+            "Collateral release completed successfully",
+            loan_id=request.loan_id,
+            txid=txid
+        )
+
+        return APIResponse(
+            success=True,
+            data={
+                "txid": txid,
+                "loan_id": request.loan_id,
+                "collateral_txid": request.collateral_txid,
+                "message": "Collateral release completed and transaction broadcast successfully"
+            },
+            message="Collateral release completed successfully"
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to execute collateral release",
+            loan_id=request.loan_id,
+            error=str(e),
+            traceback=traceback.format_exc()
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute collateral release: {str(e)}"
+        )
+
+@app.post("/transactions/collateral-capture", response_model=APIResponse)
+async def collateral_capture(request: CollateralCaptureRequest):
+    """
+    Create, sign, and broadcast Bitcoin transaction for lender to capture collateral after timelock.
+
+    This endpoint allows the lender to claim the collateral when the borrower defaults 
+    (does not repay loan on time) or when the lender does not accept loan repayment on RSK.
+    Uses CSV (CheckSequenceVerify) script path with lender timelock. The transaction is 
+    immediately broadcast to the network.
+    """
+    try:
+        logger.info(
+            "Executing collateral capture",
+            loan_id=request.loan_id,
+            collateral_txid=request.collateral_txid
+        )
+
+        txid = await vaultero_service.collateral_capture(request)
+
+        logger.info(
+            "Collateral capture completed successfully",
+            loan_id=request.loan_id,
+            txid=txid
+        )
+
+        return APIResponse(
+            success=True,
+            data={
+                "txid": txid,
+                "loan_id": request.loan_id,
+                "collateral_txid": request.collateral_txid,
+                "message": "Collateral capture completed and transaction broadcast successfully"
+            },
+            message="Collateral capture completed successfully"
+        )
+
+    except Exception as e:
+        logger.error(
+            "Failed to execute collateral capture",
+            loan_id=request.loan_id,
+            error=str(e),
+            traceback=traceback.format_exc()
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to execute collateral capture: {str(e)}"
         )
 
 @app.post("/transactions/broadcast", response_model=APIResponse)

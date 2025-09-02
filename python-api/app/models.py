@@ -55,21 +55,48 @@ class LenderWitnessRequest(BaseModel):
     preimage: str = Field(..., description="The preimage that satisfies the hashlock")
     mine_block: bool = Field(default=True, description="Whether to mine a block after broadcasting")
 
-# Signature Models
-class SignTransactionRequest(BaseModel):
+# Borrower Exit Escrow Models
+class BorrowerExitEscrowRequest(BaseModel):
+    """Request model for borrower to exit escrow (spend escrow to exit without revealing preimage)"""
     loan_id: str = Field(..., description="UUID of the loan")
-    raw_tx: str = Field(..., min_length=1, description="Raw transaction hex to sign")
-    input_amount: Decimal = Field(..., gt=0, description="Input amount in BTC")
-    signer_type: str = Field(..., pattern="^(lender)$", description="Must be 'lender' for this service")
-    transaction_type: str = Field(..., pattern="^(escrow|collateral|refund|claim)$", description="Type of transaction being signed")
-    
-class SignatureResponse(BaseModel):
-    signature: str = Field(..., description="Bitcoin signature hex")
-    signature_hash_type: str = Field(default="SIGHASH_DEFAULT", description="Signature hash type")
-    leaf_index: Optional[int] = Field(None, description="Taproot leaf index if using script path")
-    tapleaf_script: Optional[str] = Field(None, description="Taproot script hex")
-    control_block: Optional[str] = Field(None, description="Taproot control block hex")
-    witness_context: Dict[str, Any] = Field(default_factory=dict, description="Additional witness data")
+    escrow_txid: str = Field(..., min_length=64, max_length=64, description="Escrow transaction ID")
+    escrow_vout: int = Field(default=0, ge=0, description="Escrow transaction output index")
+    borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
+    lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
+    preimage_hash_borrower: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of borrower's preimage")
+    borrower_timelock: int = Field(..., gt=0, description="Borrower timelock in Bitcoin blocks")
+    exit_address: str = Field(..., description="Address where borrower wants to receive the funds")
+    exit_fee: Optional[str] = Field(default="0.001", description="Exit transaction fee in BTC")
+    borrower_private_key: str = Field(..., description="Borrower's private key in WIF format")
+
+class CollateralReleaseRequest(BaseModel):
+    """Request model for releasing collateral to borrower (spend collateral using lender's preimage)"""
+    loan_id: str = Field(..., description="UUID of the loan")
+    collateral_txid: str = Field(..., min_length=64, max_length=64, description="Collateral transaction ID")
+    collateral_vout: int = Field(default=0, ge=0, description="Collateral transaction output index")
+    borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
+    lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
+    preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
+    lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
+    release_fee: Optional[str] = Field(default="0.001", description="Release transaction fee in BTC")
+    borrower_private_key: str = Field(..., description="Borrower's private key in WIF format")
+    lender_preimage: str = Field(..., description="Lender's preimage (revealed when accepting loan repayment)")
+
+class CollateralCaptureRequest(BaseModel):
+    """Request model for lender to capture collateral after timelock (spend collateral using CSV script path)"""
+    loan_id: str = Field(..., description="UUID of the loan")
+    collateral_txid: str = Field(..., min_length=64, max_length=64, description="Collateral transaction ID")
+    collateral_vout: int = Field(default=0, ge=0, description="Collateral transaction output index")
+    borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
+    lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
+    preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
+    lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
+    capture_fee: Optional[str] = Field(default="0.001", description="Capture transaction fee in BTC")
+    lender_private_key: str = Field(..., description="Lender's private key in WIF format")
+
+
+
+
 
 # Transaction Broadcasting
 class BroadcastTransactionRequest(BaseModel):

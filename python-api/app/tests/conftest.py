@@ -158,8 +158,8 @@ def funded_escrow_address(bitcoin_rpc_setup, test_keys, test_data):
     escrow_address = loop.run_until_complete(vaultero_service.get_nums_p2tr_addr_0(
         borrower_pubkey=borrower_pubkey_hex,
         lender_pubkey=lender_pubkey_hex,
-        preimage_hash_borrower=test_data['preimage_hash_lender'],
-        borrower_timelock=test_data['lender_timelock']
+        preimage_hash_borrower=test_data['preimage_hash_borrower'],
+        borrower_timelock=test_data['borrower_timelock']
     ))
     
     print(f"Created escrow address: {escrow_address}")

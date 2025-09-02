@@ -1,5 +1,5 @@
 import pytest
-from vaultero.utils import get_nums_key, get_leaf_scripts_output_0, get_leaf_scripts_output_1, get_nums_p2tr_addr_0, get_nums_p2tr_addr_1, create_collateral_lock_tx, create_collateral_release_tx
+from vaultero.utils import get_nums_key, get_leaf_scripts_output_0, get_leaf_scripts_output_1, get_nums_p2tr_addr_0, get_nums_p2tr_addr_1, create_collateral_lock_tx, create_collateral_release_tx, create_borrower_exit_tx
 from vaultero.setup_utils import fund_address
 from bitcoinutils.transactions import TxWitnessInput, Sequence
 from bitcoinutils.utils import to_satoshis, ControlBlock
@@ -154,17 +154,13 @@ def test_spend_escrow_to_exit(test_keys, test_data, bitcoin_setup):
     txid,vout = fund_address(escrow_address, .501, proxy, bitcoin_setup['addr'])
     input_amount = proxy.gettxout(txid, vout)['value']
 
-    tx = create_collateral_lock_tx(
+    tx = create_borrower_exit_tx(
         proxy,
         borrower_pub=test_keys['borrower_pub'], 
-        lender_pub=test_keys['lender_pub'], 
-        preimage_hash_lender=test_data['preimage_hash_lender'], 
-        lender_timelock=test_data['lender_timelock'], 
-        txid=txid, vout=vout, orig_fee=0.01, collateral_amount=0.49
+        lender_pub=test_keys['lender_pub'],
+        txid=txid, vout=vout, tx_fee=0.01, release_to_borrower=True
         )
     
-    #print(f"tx: {tx}")
-    """until here is same as test_create_collateral_lock_tx"""
     scripts = get_leaf_scripts_output_0(test_keys['borrower_pub'], test_keys['lender_pub'], test_data['preimage_hash_borrower'], test_data['borrower_timelock'])
     tree = [[scripts[0], scripts[1]]]
     

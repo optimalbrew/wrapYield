@@ -6,7 +6,6 @@ import pytest
 from decimal import Decimal
 from app.models import (
     CreateCollateralRequest,
-    SignTransactionRequest,
     BroadcastTransactionRequest
 )
 

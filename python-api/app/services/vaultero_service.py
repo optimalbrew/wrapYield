@@ -37,7 +37,7 @@ except ImportError as e:
 from ..config import settings
 from ..models import (
     CreateCollateralRequest, CollateralTransactionResponse,
-    SignTransactionRequest, SignatureResponse,
+    BorrowerExitEscrowRequest, CollateralReleaseRequest, CollateralCaptureRequest,
     BroadcastTransactionRequest, BroadcastTransactionResponse
 )
 
@@ -550,36 +550,325 @@ class VaulteroService:
         except Exception as e:
             raise Exception(f"Failed to complete lender witness: {str(e)}")
 
-
-    async def sign_transaction(self, request: SignTransactionRequest) -> SignatureResponse:
+    async def borrower_exit_escrow(self, request: BorrowerExitEscrowRequest) -> str:
         """
-        Sign a Bitcoin transaction using the lender's private key.
-        This is called when the lender needs to provide their signature for a transaction.
+        Create, sign, and broadcast Bitcoin transaction for borrower to exit escrow without revealing preimage.
+        This allows the borrower to reclaim their funds if the loan is not offered or not claimed.
+        Uses the CSV (CheckSequenceVerify) script path with borrower timelock.
+        Returns the transaction ID of the broadcasted transaction.
         """
-        if not self.lender_private_key:
-            raise Exception("Lender private key not configured")
-        
         try:
-            # Use btc-vaultero to sign the transaction
-            signature_result = await self._mock_sign_transaction(
-                raw_tx=request.raw_tx,
-                input_amount=request.input_amount,
-                private_key=self.lender_private_key,
-                transaction_type=request.transaction_type
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
+            # Import here to avoid circular imports
+            from .bitcoin_rpc_service import bitcoin_rpc
+            from bitcoinutils.keys import PublicKey, PrivateKey
+            from bitcoinutils.transactions import TxWitnessInput, Sequence
+            from bitcoinutils.utils import to_satoshis, ControlBlock
+            from bitcoinutils.constants import TYPE_RELATIVE_TIMELOCK
+            from vaultero.utils import get_nums_p2tr_addr_0, get_leaf_scripts_output_0, get_nums_key
+            
+            # Convert keys - use from_hex with proper prefix for x-only pubkeys
+            borrower_pub = PublicKey.from_hex("02" + request.borrower_pubkey)  # Assume even y-coordinate
+            lender_pub = PublicKey.from_hex("02" + request.lender_pubkey)  # Assume even y-coordinate
+            borrower_priv = PrivateKey(request.borrower_private_key)
+            
+            # Get escrow address (nums_p2tr_addr_0)
+            escrow_address = get_nums_p2tr_addr_0(borrower_pub, lender_pub, request.preimage_hash_borrower, request.borrower_timelock)
+            
+            # Get transaction info from Bitcoin RPC to get input amount
+            tx_info = await bitcoin_rpc.get_transaction_info(request.escrow_txid)
+            if not tx_info:
+                raise Exception(f"Escrow transaction {request.escrow_txid} not found")
+            
+            # Handle different transaction formats
+            input_amount = None
+            if 'vout' in tx_info:
+                if request.escrow_vout >= len(tx_info['vout']):
+                    raise Exception(f"Output index {request.escrow_vout} not found in transaction")
+                input_amount = tx_info['vout'][request.escrow_vout]['value']
+            elif 'details' in tx_info:
+                for detail in tx_info['details']:
+                    if detail.get('vout') == request.escrow_vout:
+                        input_amount = abs(detail['amount'])
+                        break
+                if input_amount is None:
+                    raise Exception(f"Output index {request.escrow_vout} not found in transaction details")
+            else:
+                raise Exception(f"Unknown transaction format: missing 'vout' or 'details'")
+            
+            # Create transaction manually (following create_borrower_exit_tx logic)
+            from bitcoinutils.transactions import Transaction, TxInput, TxOutput
+            input_amount_float = float(input_amount)
+            exit_fee_float = float(request.exit_fee)
+            exit_amount_float = input_amount_float - exit_fee_float
+            
+            if exit_amount_float <= 0:
+                raise Exception(f"Exit amount {exit_amount_float} must be positive after fee {exit_fee_float}")
+            
+            # Create transaction (same logic as create_borrower_exit_tx)
+            tx_input = TxInput(request.escrow_txid, request.escrow_vout)
+            tx_output = TxOutput(to_satoshis(exit_amount_float), borrower_pub.get_address().to_script_pub_key())
+            tx = Transaction([tx_input], [tx_output], has_segwit=True)
+            
+            # Get leaf scripts for escrow (output_0)
+            scripts = get_leaf_scripts_output_0(borrower_pub, lender_pub, request.preimage_hash_borrower, request.borrower_timelock)
+            
+            # Use CSV borrower path (leaf_index = 0)
+            leaf_index = 0  # csv_borrower path
+            tapleaf_script = scripts[leaf_index]
+            
+            # Create control block
+            nums_key = get_nums_key()
+            tree = [[scripts[0], scripts[1]]]
+            ctrl_block = ControlBlock(nums_key, tree, leaf_index, is_odd=escrow_address.is_odd())
+            
+            # Set sequence for CSV timelock
+            seq = Sequence(TYPE_RELATIVE_TIMELOCK, request.borrower_timelock)
+            seq_for_n_seq = seq.for_input_sequence()
+            if seq_for_n_seq is None:
+                raise Exception("Failed to create sequence for CSV timelock")
+            tx.inputs[0].sequence = seq_for_n_seq
+            
+            # Sign the transaction
+            sig_borrower = borrower_priv.sign_taproot_input(
+                tx, 0,
+                [escrow_address.to_script_pub_key()],
+                [to_satoshis(input_amount_float)],
+                script_path=True,
+                tapleaf_script=tapleaf_script,
+                tweak=False
             )
             
-            return SignatureResponse(
-                signature=signature_result["signature"],
-                signature_hash_type=signature_result.get("hash_type", "SIGHASH_DEFAULT"),
-                leaf_index=signature_result.get("leaf_index"),
-                tapleaf_script=signature_result.get("tapleaf_script"),
-                control_block=signature_result.get("control_block"),
-                witness_context=signature_result.get("witness_context", {})
-            )
+            # Create witness
+            witness = TxWitnessInput([
+                sig_borrower,
+                tapleaf_script.to_hex(),
+                ctrl_block.to_hex()
+            ])
+            tx.witnesses.append(witness)
+            
+            # Broadcast transaction
+            txid = await bitcoin_rpc.broadcast_transaction(tx.serialize())
+            
+            return txid
             
         except Exception as e:
-            raise Exception(f"Failed to sign transaction: {str(e)}")
-    
+            raise Exception(f"Failed to execute borrower exit escrow: {str(e)}")
+
+    async def collateral_release(self, request: CollateralReleaseRequest) -> str:
+        """
+        Create, sign, and broadcast Bitcoin transaction to release collateral to borrower.
+        This allows the borrower to retrieve their collateral when the lender accepts loan repayment
+        and reveals their preimage on RSK.
+        Uses the hashlock + siglock script path with lender's preimage.
+        Returns the transaction ID of the broadcasted transaction.
+        """
+        try:
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
+            # Import here to avoid circular imports
+            from .bitcoin_rpc_service import bitcoin_rpc
+            from bitcoinutils.keys import PublicKey, PrivateKey
+            from bitcoinutils.transactions import TxWitnessInput
+            from bitcoinutils.utils import to_satoshis, ControlBlock
+            from vaultero.utils import get_nums_p2tr_addr_1, get_leaf_scripts_output_1, get_nums_key
+            
+            # Convert keys - use from_hex with proper prefix for x-only pubkeys
+            borrower_pub = PublicKey.from_hex("02" + request.borrower_pubkey)  # Assume even y-coordinate
+            lender_pub = PublicKey.from_hex("02" + request.lender_pubkey)  # Assume even y-coordinate
+            borrower_priv = PrivateKey(request.borrower_private_key)
+            
+            # Get collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(borrower_pub, lender_pub, request.preimage_hash_lender, request.lender_timelock)
+            
+            # Get transaction info from Bitcoin RPC to get input amount
+            tx_info = await bitcoin_rpc.get_transaction_info(request.collateral_txid)
+            if not tx_info:
+                raise Exception(f"Collateral transaction {request.collateral_txid} not found")
+            
+            # Handle different transaction formats
+            input_amount = None
+            if 'vout' in tx_info:
+                if request.collateral_vout >= len(tx_info['vout']):
+                    raise Exception(f"Output index {request.collateral_vout} not found in transaction")
+                input_amount = tx_info['vout'][request.collateral_vout]['value']
+            elif 'details' in tx_info:
+                for detail in tx_info['details']:
+                    if detail.get('vout') == request.collateral_vout:
+                        input_amount = abs(detail['amount'])
+                        break
+                if input_amount is None:
+                    raise Exception(f"Output index {request.collateral_vout} not found in transaction details")
+            else:
+                raise Exception(f"Unknown transaction format: missing 'vout' or 'details'")
+            
+            # Create transaction manually (following create_collateral_release_tx logic)
+            from bitcoinutils.transactions import Transaction, TxInput, TxOutput
+            input_amount_float = float(input_amount)
+            release_fee_float = float(request.release_fee)
+            release_amount_float = input_amount_float - release_fee_float
+            
+            if release_amount_float <= 0:
+                raise Exception(f"Release amount {release_amount_float} must be positive after fee {release_fee_float}")
+            
+            # Create transaction (same logic as create_collateral_release_tx with release_to_borrower=True)
+            tx_input = TxInput(request.collateral_txid, request.collateral_vout)
+            tx_output = TxOutput(to_satoshis(release_amount_float), borrower_pub.get_address().to_script_pub_key())
+            tx = Transaction([tx_input], [tx_output], has_segwit=True)
+            
+            # Get leaf scripts for collateral (output_1)
+            scripts = get_leaf_scripts_output_1(borrower_pub, lender_pub, request.preimage_hash_lender, request.lender_timelock)
+            
+            # Use hashlock + siglock path (leaf_index = 1)
+            leaf_index = 1  # hashlock + siglock path
+            tapleaf_script = scripts[leaf_index]
+            
+            # Create control block
+            nums_key = get_nums_key()
+            tree = [[scripts[0], scripts[1]]]
+            ctrl_block = ControlBlock(nums_key, tree, leaf_index, is_odd=collateral_address.is_odd())
+            
+            # Convert lender's preimage to hex
+            preimage_hex = request.lender_preimage.encode('utf-8').hex()
+            
+            # Sign the transaction
+            sig_borrower = borrower_priv.sign_taproot_input(
+                tx, 0,
+                [collateral_address.to_script_pub_key()],
+                [to_satoshis(input_amount_float)],
+                script_path=True,
+                tapleaf_script=tapleaf_script,
+                tweak=False
+            )
+            
+            # Create witness (borrower signature + preimage + script + control block)
+            witness = TxWitnessInput([
+                sig_borrower,
+                preimage_hex,
+                tapleaf_script.to_hex(),
+                ctrl_block.to_hex()
+            ])
+            tx.witnesses.append(witness)
+            
+            # Broadcast transaction
+            txid = await bitcoin_rpc.broadcast_transaction(tx.serialize())
+            
+            return txid
+            
+        except Exception as e:
+            raise Exception(f"Failed to execute collateral release: {str(e)}")
+
+    async def collateral_capture(self, request: CollateralCaptureRequest) -> str:
+        """
+        Create, sign, and broadcast Bitcoin transaction for lender to capture collateral after timelock.
+        This allows the lender to claim the collateral when the borrower defaults (does not repay loan on time)
+        or when the lender does not accept loan repayment on RSK.
+        Uses the CSV (CheckSequenceVerify) script path with lender timelock.
+        Returns the transaction ID of the broadcasted transaction.
+        """
+        try:
+            # Check if vaultero is available
+            self._check_vaultero_availability()
+            
+            # Import here to avoid circular imports
+            from .bitcoin_rpc_service import bitcoin_rpc
+            from bitcoinutils.keys import PublicKey, PrivateKey
+            from bitcoinutils.transactions import TxWitnessInput, Sequence
+            from bitcoinutils.utils import to_satoshis, ControlBlock
+            from bitcoinutils.constants import TYPE_RELATIVE_TIMELOCK
+            from vaultero.utils import get_nums_p2tr_addr_1, get_leaf_scripts_output_1, get_nums_key
+            
+            # Convert keys - use from_hex with proper prefix for x-only pubkeys
+            borrower_pub = PublicKey.from_hex("02" + request.borrower_pubkey)  # Assume even y-coordinate
+            lender_pub = PublicKey.from_hex("02" + request.lender_pubkey)  # Assume even y-coordinate
+            lender_priv = PrivateKey(request.lender_private_key)
+            
+            # Get collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(borrower_pub, lender_pub, request.preimage_hash_lender, request.lender_timelock)
+            
+            # Get transaction info from Bitcoin RPC to get input amount
+            tx_info = await bitcoin_rpc.get_transaction_info(request.collateral_txid)
+            if not tx_info:
+                raise Exception(f"Collateral transaction {request.collateral_txid} not found")
+            
+            # Handle different transaction formats
+            input_amount = None
+            if 'vout' in tx_info:
+                if request.collateral_vout >= len(tx_info['vout']):
+                    raise Exception(f"Output index {request.collateral_vout} not found in transaction")
+                input_amount = tx_info['vout'][request.collateral_vout]['value']
+            elif 'details' in tx_info:
+                for detail in tx_info['details']:
+                    if detail.get('vout') == request.collateral_vout:
+                        input_amount = abs(detail['amount'])
+                        break
+                if input_amount is None:
+                    raise Exception(f"Output index {request.collateral_vout} not found in transaction details")
+            else:
+                raise Exception(f"Unknown transaction format: missing 'vout' or 'details'")
+            
+            # Create transaction manually (following create_collateral_release_tx logic with release_to_borrower=False)
+            from bitcoinutils.transactions import Transaction, TxInput, TxOutput
+            input_amount_float = float(input_amount)
+            capture_fee_float = float(request.capture_fee)
+            capture_amount_float = input_amount_float - capture_fee_float
+            
+            if capture_amount_float <= 0:
+                raise Exception(f"Capture amount {capture_amount_float} must be positive after fee {capture_fee_float}")
+            
+            # Create transaction (same logic as create_collateral_release_tx with release_to_borrower=False)
+            tx_input = TxInput(request.collateral_txid, request.collateral_vout)
+            tx_output = TxOutput(to_satoshis(capture_amount_float), lender_pub.get_address().to_script_pub_key())
+            tx = Transaction([tx_input], [tx_output], has_segwit=True)
+            
+            # Get leaf scripts for collateral (output_1)
+            scripts = get_leaf_scripts_output_1(borrower_pub, lender_pub, request.preimage_hash_lender, request.lender_timelock)
+            
+            # Use CSV lender path (leaf_index = 0)
+            leaf_index = 0  # csv_lender path
+            tapleaf_script = scripts[leaf_index]
+            
+            # Create control block
+            nums_key = get_nums_key()
+            tree = [[scripts[0], scripts[1]]]
+            ctrl_block = ControlBlock(nums_key, tree, leaf_index, is_odd=collateral_address.is_odd())
+            
+            # Set sequence for CSV timelock
+            seq = Sequence(TYPE_RELATIVE_TIMELOCK, request.lender_timelock)
+            seq_for_n_seq = seq.for_input_sequence()
+            if seq_for_n_seq is None:
+                raise Exception("Failed to create sequence for CSV timelock")
+            tx.inputs[0].sequence = seq_for_n_seq
+            
+            # Sign the transaction
+            sig_lender = lender_priv.sign_taproot_input(
+                tx, 0,
+                [collateral_address.to_script_pub_key()],
+                [to_satoshis(input_amount_float)],
+                script_path=True,
+                tapleaf_script=tapleaf_script,
+                tweak=False
+            )
+            
+            # Create witness (lender signature + script + control block)
+            witness = TxWitnessInput([
+                sig_lender,
+                tapleaf_script.to_hex(),
+                ctrl_block.to_hex()
+            ])
+            tx.witnesses.append(witness)
+            
+            # Broadcast transaction
+            txid = await bitcoin_rpc.broadcast_transaction(tx.serialize())
+            
+            return txid
+            
+        except Exception as e:
+            raise Exception(f"Failed to execute collateral capture: {str(e)}")
+
     async def broadcast_transaction(self, request: BroadcastTransactionRequest) -> BroadcastTransactionResponse:
         """
         Broadcast a completed Bitcoin transaction to the network using Bitcoin Core RPC.
@@ -650,46 +939,7 @@ class VaulteroService:
         except Exception as e:
             raise Exception(f"Failed to get transaction status: {str(e)}")
     
-    # Mock implementations for development
-    # In production, these would call actual btc-vaultero functions
-    
 
-    async def _mock_create_collateral(self, **kwargs) -> Dict[str, Any]:
-        """Mock implementation of collateral transaction creation"""
-        return {
-            "raw_tx": "0200000001" + "11" * 100,  # Mock raw transaction
-            "collateral_address": f"bc1p{'1' * 58}",  # Mock P2TR address
-            "fee": kwargs["fee"],
-            "script_details": {
-                "escrow_txid": kwargs["escrow_txid"],
-                "lender_pubkey": kwargs["lender_pubkey"],
-                "preimage_hash": kwargs["preimage_hash"],
-                "timelock": kwargs["timelock"]
-            }
-        }
-    
-    async def _mock_sign_transaction(self, **kwargs) -> Dict[str, Any]:
-        """Mock implementation of transaction signing"""
-        return {
-            "signature": "a0b1c2d3e4f5" + "00" * 26,  # Mock 64-byte signature
-            "hash_type": "SIGHASH_DEFAULT",
-            "leaf_index": 1,
-            "tapleaf_script": "6382012088a914" + "00" * 20 + "87",
-            "control_block": "c1" + "00" * 32,
-            "witness_context": {
-                "input_amount": float(kwargs["input_amount"]),
-                "transaction_type": kwargs["transaction_type"]
-            }
-        }
-    
-    async def _mock_broadcast_transaction(self, **kwargs) -> Dict[str, Any]:
-        """Mock implementation of transaction broadcasting"""
-        # Generate a mock transaction ID
-        mock_txid = hashlib.sha256(kwargs["raw_tx"].encode()).hexdigest()
-        return {
-            "txid": mock_txid,
-            "success": True
-        }
 
 # Global service instance
 vaultero_service = VaulteroService()

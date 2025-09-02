@@ -178,6 +178,31 @@ def create_collateral_lock_tx(
     
     return tx
 
+def create_borrower_exit_tx(
+        proxy: NodeProxy,
+        borrower_pub: PublicKey, lender_pub: PublicKey, 
+        txid: str='', vout: int=0,
+        tx_fee: float = 0.01,
+        release_to_borrower: bool = True
+        ):
+    from bitcoinutils.transactions import Transaction, TxInput, TxOutput
+    from bitcoinutils.utils import to_satoshis
+    
+    """
+    Create a transaction for the borrower to exit escrow without revealing preimage.
+    """
+    input_amount = proxy.gettxout(txid, vout)['value']
+    assert input_amount > tx_fee, "Input amount is less than tx fee"
+    
+    print(f"input_amount: {input_amount}, tx_fee: {tx_fee}")
+    print(f"input_amount: {to_satoshis(input_amount)} - tx_fee: {to_satoshis(tx_fee)}")
+    
+    txin = TxInput(txid, vout)
+    txout = TxOutput(to_satoshis(input_amount) - to_satoshis(tx_fee), borrower_pub.get_address().to_script_pub_key())
+    tx = Transaction([txin], [txout], has_segwit=True)
+    
+    return tx
+
 def create_collateral_release_tx(
         proxy: NodeProxy,
         borrower_pub: PublicKey, lender_pub: PublicKey, 

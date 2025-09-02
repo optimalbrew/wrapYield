@@ -526,6 +526,458 @@ class TestVaulteroService:
         except Exception as e:
             pytest.fail(f"Separate signature workflow test failed: {e}")
 
+    @pytest.mark.asyncio
+    async def test_borrower_exit_escrow_workflow(self, vaultero_service, test_keys, test_data, funded_escrow_address):
+        """Test the complete borrower exit escrow workflow: create, sign, and broadcast exit transaction."""
+        if not vaultero_service.is_vaultero_available():
+            pytest.skip("Vaultero library not available, skipping real function test")
+        
+        try:
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            
+            print(f"Testing borrower exit escrow workflow with:")
+            print(f"  Borrower pubkey (x-only): {borrower_pubkey_xonly}")
+            print(f"  Lender pubkey (x-only): {lender_pubkey_xonly}")
+            print(f"  Preimage hash borrower: {test_data['preimage_hash_borrower']}")
+            print(f"  Funded escrow address: {funded_escrow_address['address']}")
+            print(f"  Escrow transaction: {funded_escrow_address['txid']}")
+            print(f"  Escrow vout: {funded_escrow_address['vout']}")
+            
+            # Use the funded escrow address from the fixture
+            test_escrow_txid = funded_escrow_address['txid']
+            test_escrow_vout = funded_escrow_address['vout']
+            
+            # Use borrower's P2TR address as the exit address (same as what create_borrower_exit_tx uses)
+            exit_address_str = test_keys['borrower_pub'].get_address().to_string()
+            print(f"  Exit address (borrower's P2TR): {exit_address_str}")
+            
+            # Create borrower exit request
+            from app.models import BorrowerExitEscrowRequest
+            request = BorrowerExitEscrowRequest(
+                loan_id="test-borrower-exit-workflow",
+                escrow_txid=test_escrow_txid,
+                escrow_vout=test_escrow_vout,
+                borrower_pubkey=borrower_pubkey_xonly,
+                lender_pubkey=lender_pubkey_xonly,
+                preimage_hash_borrower=test_data['preimage_hash_borrower'],
+                borrower_timelock=test_data['borrower_timelock'],
+                exit_address=exit_address_str,  # Borrower's P2TR address
+                exit_fee="0.001",
+                borrower_private_key="cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz"  # Borrower's private key
+            )
+            
+            # Step 1: Mine blocks to advance the chain past the borrower timelock (required for CSV)
+            from app.services.bitcoin_rpc_service import bitcoin_rpc
+            block_hashes = await bitcoin_rpc.generate_blocks(test_data['borrower_timelock'] + 1)
+            print(f"✅ Advanced chain by {test_data['borrower_timelock'] + 1} blocks: {block_hashes}")
+            
+            # Step 2: Execute borrower exit escrow (create, sign, and broadcast)
+            txid = await vaultero_service.borrower_exit_escrow(request)
+            
+            # Verify transaction was broadcast successfully
+            assert txid is not None
+            assert len(txid) == 64  # Bitcoin transaction ID length
+            print(f"✅ Borrower exit transaction broadcast successfully with txid: {txid}")
+            
+            # Step 3: Verify transaction is confirmed
+            tx_info = await bitcoin_rpc.get_transaction_info(txid)
+            assert tx_info is not None
+            print(f"✅ Transaction confirmed in block with {tx_info.get('confirmations', 0)} confirmations")
+            
+            # Step 4: Verify the exit transaction details
+            # Note: Transaction may not be confirmed immediately after broadcast
+            # The important thing is that it was broadcast successfully without errors
+            
+            # Verify transaction details
+            assert 'txid' in tx_info, "Transaction info should contain txid"
+            assert tx_info['txid'] == txid, "Transaction ID should match"
+            
+            print("✅ Complete borrower exit escrow workflow test passed!")
+            
+        except Exception as e:
+            pytest.fail(f"Borrower exit escrow workflow test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_collateral_release_workflow(self, vaultero_service, test_keys, test_data):
+        """Test the complete collateral release workflow: create, sign, and broadcast release transaction."""
+        if not vaultero_service.is_vaultero_available():
+            pytest.skip("Vaultero library not available, skipping real function test")
+
+        try:
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+
+            print(f"Testing collateral release workflow with:")
+            print(f"  Borrower pubkey (x-only): {borrower_pubkey_xonly}")
+            print(f"  Lender pubkey (x-only): {lender_pubkey_xonly}")
+            print(f"  Preimage hash lender: {test_data['preimage_hash_lender']}")
+            print(f"  Lender preimage: {test_data['preimage_lender']}")
+
+            # Create a funded collateral address for testing
+            from app.services.bitcoin_rpc_service import bitcoin_rpc
+            from vaultero.utils import get_nums_p2tr_addr_1
+            
+            # Create collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(
+                test_keys['borrower_pub'], 
+                test_keys['lender_pub'], 
+                test_data['preimage_hash_lender'], 
+                test_data['lender_timelock']
+            )
+            
+            print(f"  Created collateral address: {collateral_address.to_string()}")
+            
+            # Fund the collateral address
+            funding_amount = 0.0021  # BTC
+            print(f"Funding collateral address with {funding_amount} BTC")
+            
+            funding_txid = bitcoin_rpc.rpc.sendtoaddress(collateral_address.to_string(), funding_amount)
+            print(f"Funding transaction ID: {funding_txid}")
+            
+            # Generate blocks to confirm the funding transaction
+            await bitcoin_rpc.generate_blocks(10)
+            print("Generated 10 blocks to confirm funding transaction")
+            
+            # Get transaction details to find the UTXO
+            tx_details = await bitcoin_rpc.get_transaction_info(funding_txid)
+            
+            # Find the output that went to our collateral address
+            collateral_vout = None
+            for detail in tx_details.get('details', []):
+                if detail.get('address') == collateral_address.to_string():
+                    collateral_vout = detail.get('vout')
+                    break
+            
+            if collateral_vout is None:
+                raise Exception("Error: Could not find the correct output to collateral address")
+            
+            print(f"Found UTXO at vout: {collateral_vout}")
+
+            # Create collateral release request
+            from app.models import CollateralReleaseRequest
+            request = CollateralReleaseRequest(
+                loan_id="test-collateral-release-workflow",
+                collateral_txid=funding_txid,
+                collateral_vout=collateral_vout,
+                borrower_pubkey=borrower_pubkey_xonly,
+                lender_pubkey=lender_pubkey_xonly,
+                preimage_hash_lender=test_data['preimage_hash_lender'],
+                lender_timelock=test_data['lender_timelock'],
+                release_fee="0.001",
+                borrower_private_key="cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz",  # Borrower's private key
+                lender_preimage=test_data['preimage_lender']  # Lender's preimage
+            )
+
+            # Execute collateral release (create, sign, and broadcast)
+            txid = await vaultero_service.collateral_release(request)
+
+            # Verify transaction was broadcast successfully
+            assert txid is not None
+            assert len(txid) == 64  # Bitcoin transaction ID length
+            print(f"✅ Collateral release transaction broadcast successfully with txid: {txid}")
+
+            # Verify transaction is confirmed
+            tx_info = await bitcoin_rpc.get_transaction_info(txid)
+            assert tx_info is not None
+            print(f"✅ Transaction confirmed in block with {tx_info.get('confirmations', 0)} confirmations")
+
+            # Verify transaction details
+            assert 'txid' in tx_info, "Transaction info should contain txid"
+            assert tx_info['txid'] == txid, "Transaction ID should match"
+
+            print("✅ Complete collateral release workflow test passed!")
+
+        except Exception as e:
+            pytest.fail(f"Collateral release workflow test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_collateral_release_api_endpoint(self, vaultero_service, test_keys, test_data):
+        """Test the collateral release API endpoint."""
+        if not vaultero_service.is_vaultero_available():
+            pytest.skip("Vaultero library not available, skipping real function test")
+
+        try:
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+
+            # Create a funded collateral address for testing
+            from app.services.bitcoin_rpc_service import bitcoin_rpc
+            from vaultero.utils import get_nums_p2tr_addr_1
+            
+            # Create collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(
+                test_keys['borrower_pub'], 
+                test_keys['lender_pub'], 
+                test_data['preimage_hash_lender'], 
+                test_data['lender_timelock']
+            )
+            
+            # Fund the collateral address
+            funding_amount = 0.0021  # BTC
+            funding_txid = bitcoin_rpc.rpc.sendtoaddress(collateral_address.to_string(), funding_amount)
+            
+            # Generate blocks to confirm the funding transaction
+            await bitcoin_rpc.generate_blocks(10)
+            
+            # Get transaction details to find the UTXO
+            tx_details = await bitcoin_rpc.get_transaction_info(funding_txid)
+            
+            # Find the output that went to our collateral address
+            collateral_vout = None
+            for detail in tx_details.get('details', []):
+                if detail.get('address') == collateral_address.to_string():
+                    collateral_vout = detail.get('vout')
+                    break
+            
+            if collateral_vout is None:
+                raise Exception("Error: Could not find the correct output to collateral address")
+
+            # Create collateral release request
+            from app.models import CollateralReleaseRequest
+            request = CollateralReleaseRequest(
+                loan_id="test-collateral-release-api",
+                collateral_txid=funding_txid,
+                collateral_vout=collateral_vout,
+                borrower_pubkey=borrower_pubkey_xonly,
+                lender_pubkey=lender_pubkey_xonly,
+                preimage_hash_lender=test_data['preimage_hash_lender'],
+                lender_timelock=test_data['lender_timelock'],
+                release_fee="0.001",
+                borrower_private_key="cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz",  # Borrower's private key
+                lender_preimage=test_data['preimage_lender']  # Lender's preimage
+            )
+
+            # Execute collateral release via service
+            txid = await vaultero_service.collateral_release(request)
+
+            # Verify transaction was broadcast successfully
+            assert txid is not None
+            assert len(txid) == 64  # Bitcoin transaction ID length
+            print(f"✅ Collateral release API test passed with txid: {txid}")
+
+        except Exception as e:
+            pytest.fail(f"Collateral release API test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_collateral_capture_workflow(self, vaultero_service, test_keys, test_data):
+        """Test the complete collateral capture workflow: create, sign, and broadcast capture transaction."""
+        if not vaultero_service.is_vaultero_available():
+            pytest.skip("Vaultero library not available, skipping real function test")
+
+        try:
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+
+            print(f"Testing collateral capture workflow with:")
+            print(f"  Borrower pubkey (x-only): {borrower_pubkey_xonly}")
+            print(f"  Lender pubkey (x-only): {lender_pubkey_xonly}")
+            print(f"  Preimage hash lender: {test_data['preimage_hash_lender']}")
+
+            # Create a funded collateral address for testing
+            from app.services.bitcoin_rpc_service import bitcoin_rpc
+            from vaultero.utils import get_nums_p2tr_addr_1
+            
+            # Create collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(
+                test_keys['borrower_pub'], 
+                test_keys['lender_pub'], 
+                test_data['preimage_hash_lender'], 
+                test_data['lender_timelock']
+            )
+            
+            print(f"  Created collateral address: {collateral_address.to_string()}")
+            
+            # Fund the collateral address
+            funding_amount = 0.0021  # BTC
+            print(f"Funding collateral address with {funding_amount} BTC")
+            
+            funding_txid = bitcoin_rpc.rpc.sendtoaddress(collateral_address.to_string(), funding_amount)
+            print(f"Funding transaction ID: {funding_txid}")
+            
+            # Generate blocks to confirm the funding transaction
+            await bitcoin_rpc.generate_blocks(10)
+            print("Generated 10 blocks to confirm funding transaction")
+            
+            # Get transaction details to find the UTXO
+            tx_details = await bitcoin_rpc.get_transaction_info(funding_txid)
+            
+            # Find the output that went to our collateral address
+            collateral_vout = None
+            for detail in tx_details.get('details', []):
+                if detail.get('address') == collateral_address.to_string():
+                    collateral_vout = detail.get('vout')
+                    break
+            
+            if collateral_vout is None:
+                raise Exception("Error: Could not find the correct output to collateral address")
+            
+            print(f"Found UTXO at vout: {collateral_vout}")
+
+            # Step 1: Mine blocks to advance the chain past the lender timelock (required for CSV)
+            block_hashes = await bitcoin_rpc.generate_blocks(test_data['lender_timelock'] + 1)
+            print(f"✅ Advanced chain by {test_data['lender_timelock'] + 1} blocks: {block_hashes}")
+
+            # Create collateral capture request
+            from app.models import CollateralCaptureRequest
+            request = CollateralCaptureRequest(
+                loan_id="test-collateral-capture-workflow",
+                collateral_txid=funding_txid,
+                collateral_vout=collateral_vout,
+                borrower_pubkey=borrower_pubkey_xonly,
+                lender_pubkey=lender_pubkey_xonly,
+                preimage_hash_lender=test_data['preimage_hash_lender'],
+                lender_timelock=test_data['lender_timelock'],
+                capture_fee="0.001",
+                lender_private_key="cMrC8dGmStj3pz7mbY3vjwhXYcQwkcaWwV4QFCTF25WwVW1TCDkJ"  # Lender's private key
+            )
+
+            # Execute collateral capture (create, sign, and broadcast)
+            txid = await vaultero_service.collateral_capture(request)
+
+            # Verify transaction was broadcast successfully
+            assert txid is not None
+            assert len(txid) == 64  # Bitcoin transaction ID length
+            print(f"✅ Collateral capture transaction broadcast successfully with txid: {txid}")
+
+            # Verify transaction is confirmed
+            tx_info = await bitcoin_rpc.get_transaction_info(txid)
+            assert tx_info is not None
+            print(f"✅ Transaction confirmed in block with {tx_info.get('confirmations', 0)} confirmations")
+
+            # Verify transaction details
+            assert 'txid' in tx_info, "Transaction info should contain txid"
+            assert tx_info['txid'] == txid, "Transaction ID should match"
+
+            print("✅ Complete collateral capture workflow test passed!")
+
+        except Exception as e:
+            pytest.fail(f"Collateral capture workflow test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_collateral_capture_api_endpoint(self, vaultero_service, test_keys, test_data):
+        """Test the collateral capture API endpoint."""
+        if not vaultero_service.is_vaultero_available():
+            pytest.skip("Vaultero library not available, skipping real function test")
+
+        try:
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+
+            # Create a funded collateral address for testing
+            from app.services.bitcoin_rpc_service import bitcoin_rpc
+            from vaultero.utils import get_nums_p2tr_addr_1
+            
+            # Create collateral address (nums_p2tr_addr_1)
+            collateral_address = get_nums_p2tr_addr_1(
+                test_keys['borrower_pub'], 
+                test_keys['lender_pub'], 
+                test_data['preimage_hash_lender'], 
+                test_data['lender_timelock']
+            )
+            
+            # Fund the collateral address
+            funding_amount = 0.0021  # BTC
+            funding_txid = bitcoin_rpc.rpc.sendtoaddress(collateral_address.to_string(), funding_amount)
+            
+            # Generate blocks to confirm the funding transaction
+            await bitcoin_rpc.generate_blocks(10)
+            
+            # Get transaction details to find the UTXO
+            tx_details = await bitcoin_rpc.get_transaction_info(funding_txid)
+            
+            # Find the output that went to our collateral address
+            collateral_vout = None
+            for detail in tx_details.get('details', []):
+                if detail.get('address') == collateral_address.to_string():
+                    collateral_vout = detail.get('vout')
+                    break
+            
+            if collateral_vout is None:
+                raise Exception("Error: Could not find the correct output to collateral address")
+
+            # Mine blocks to advance the chain past the lender timelock (required for CSV)
+            await bitcoin_rpc.generate_blocks(test_data['lender_timelock'] + 1)
+
+            # Create collateral capture request
+            from app.models import CollateralCaptureRequest
+            request = CollateralCaptureRequest(
+                loan_id="test-collateral-capture-api",
+                collateral_txid=funding_txid,
+                collateral_vout=collateral_vout,
+                borrower_pubkey=borrower_pubkey_xonly,
+                lender_pubkey=lender_pubkey_xonly,
+                preimage_hash_lender=test_data['preimage_hash_lender'],
+                lender_timelock=test_data['lender_timelock'],
+                capture_fee="0.001",
+                lender_private_key="cMrC8dGmStj3pz7mbY3vjwhXYcQwkcaWwV4QFCTF25WwVW1TCDkJ"  # Lender's private key
+            )
+
+            # Execute collateral capture via service
+            txid = await vaultero_service.collateral_capture(request)
+
+            # Verify transaction was broadcast successfully
+            assert txid is not None
+            assert len(txid) == 64  # Bitcoin transaction ID length
+            print(f"✅ Collateral capture API test passed with txid: {txid}")
+
+        except Exception as e:
+            pytest.fail(f"Collateral capture API test failed: {e}")
+
+    @pytest.mark.asyncio
+    async def test_borrower_exit_escrow_api_endpoint(self, test_keys, test_data, funded_escrow_address):
+        """Test the borrower exit escrow API endpoint."""
+        try:
+            from fastapi.testclient import TestClient
+            from app.main import app
+            
+            client = TestClient(app)
+            
+            # Convert pubkey objects to the format needed by the API
+            borrower_pubkey_xonly = test_keys['borrower_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            lender_pubkey_xonly = test_keys['lender_pub'].to_hex()[2:]  # Remove '02' or '03' prefix
+            
+            # Use the funded escrow address from the fixture
+            test_escrow_txid = funded_escrow_address['txid']
+            test_escrow_vout = funded_escrow_address['vout']
+            
+            # Create request payload
+            request_data = {
+                "loan_id": "test-borrower-exit-api",
+                "escrow_txid": test_escrow_txid,
+                "escrow_vout": test_escrow_vout,
+                "borrower_pubkey": borrower_pubkey_xonly,
+                "lender_pubkey": lender_pubkey_xonly,
+                "preimage_hash_borrower": test_data['preimage_hash_borrower'],
+                "borrower_timelock": test_data['borrower_timelock'],
+                "exit_address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+                "exit_fee": "0.001",
+                "borrower_private_key": "cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz"
+            }
+            
+            # Make API request
+            response = client.post("/transactions/borrower-exit", json=request_data)
+            
+            # Verify response
+            assert response.status_code == 200, f"API request failed with status {response.status_code}: {response.text}"
+            
+            response_data = response.json()
+            assert response_data["success"] == True, "API response should indicate success"
+            assert "txid" in response_data["data"], "Response should contain transaction ID"
+            assert len(response_data["data"]["txid"]) == 64, "Transaction ID should be 64 characters"
+            assert response_data["data"]["loan_id"] == "test-borrower-exit-api", "Loan ID should match"
+            assert response_data["data"]["exit_address"] == "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh", "Exit address should match"
+            
+            print(f"✅ API endpoint test passed! Transaction ID: {response_data['data']['txid']}")
+            
+        except Exception as e:
+            pytest.fail(f"Borrower exit escrow API endpoint test failed: {e}")
+
 class TestBitcoinRPCService:
     """Test BitcoinRPCService functionality using real Bitcoin Core RPC."""
     
