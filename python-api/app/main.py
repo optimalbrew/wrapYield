@@ -118,9 +118,7 @@ async def root():
             "preimage": {
                 "generate": "POST /preimage/generate"
             },
-            "loans": {
-                "status": "GET /loans/{loan_id}/status"
-            }
+
         }
     }
 
@@ -685,44 +683,7 @@ async def generate_preimage():
             detail=f"Failed to generate preimage: {str(e)}"
         )
 
-# Loan Management Endpoints
 
-@app.get("/loans/{loan_id}/status", response_model=APIResponse)
-async def get_loan_status(loan_id: str):
-    """
-    Get the Bitcoin-related status of a loan.
-    
-    This endpoint provides information about Bitcoin transactions and signatures
-    associated with a specific loan.
-    """
-    try:
-        logger.info("Getting loan status", loan_id=loan_id)
-        
-        # In a full implementation, this would query transaction database
-        # and return status of all Bitcoin transactions for the loan
-        result = {
-            "loan_id": loan_id,
-            "bitcoin_transactions": [],
-            "pending_signatures": [],
-            "next_action": "awaiting_borrower_signature"
-        }
-        
-        return APIResponse(
-            success=True,
-            data=result,
-            message="Loan status retrieved successfully"
-        )
-        
-    except Exception as e:
-        logger.error(
-            "Failed to get loan status",
-            loan_id=loan_id,
-            error=str(e)
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get loan status: {str(e)}"
-        )
 
 # Bitcoin Core RPC Endpoints (for regtest operations)
 

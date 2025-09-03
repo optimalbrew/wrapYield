@@ -134,7 +134,7 @@ def bitcoin_rpc_setup():
     print("Bitcoin RPC setup complete")
     return bitcoin_rpc
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def funded_escrow_address(bitcoin_rpc_setup, test_keys, test_data):
     """Create a funded escrow address for testing.
     

@@ -386,7 +386,7 @@ logger.info(
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/preimage/generate` | Generate preimage for HTLC |
-| `GET` | `/loans/{loan_id}/status` | Get Bitcoin status for loan |
+
 | `GET` | `/health` | Service health check |
 
 ### Debug Endpoints (Development Only)

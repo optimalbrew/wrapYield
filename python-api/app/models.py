@@ -22,7 +22,9 @@ class CreateCollateralRequest(BaseModel):
     escrow_vout: int = Field(default=0, ge=0, description="Escrow transaction output index")
     borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
     lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
+    preimage_hash_borrower: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of borrower's preimage")
     preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
+    borrower_timelock: int = Field(..., gt=0, description="Borrower timelock in Bitcoin blocks")
     lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
     collateral_amount: Decimal = Field(..., gt=0, description="Collateral amount in BTC")
     origination_fee: Optional[Decimal] = Field(default=Decimal("0.001"), description="Origination fee in BTC")
@@ -42,8 +44,8 @@ class BorrowerSignatureRequest(BaseModel):
     escrow_vout: int = Field(default=0, ge=0, description="Escrow transaction output index")
     borrower_pubkey: str = Field(..., min_length=64, max_length=64, description="Borrower's x-only pubkey")
     lender_pubkey: str = Field(..., min_length=64, max_length=64, description="Lender's x-only pubkey")
-    preimage_hash_lender: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of lender's preimage")
-    lender_timelock: int = Field(..., gt=0, description="Lender timelock in Bitcoin blocks")
+    preimage_hash_borrower: str = Field(..., min_length=64, max_length=64, description="SHA256 hash of borrower's preimage")
+    borrower_timelock: int = Field(..., gt=0, description="Borrower timelock in Bitcoin blocks")
     collateral_amount: str = Field(..., description="Collateral amount in BTC")
     origination_fee: Optional[str] = Field(default="0.001", description="Origination fee in BTC")
     borrower_private_key: str = Field(..., description="Borrower's private key in WIF format")
@@ -108,16 +110,7 @@ class BroadcastTransactionResponse(BaseModel):
     success: bool = Field(..., description="Whether broadcast was successful")
     confirmations: int = Field(default=0, description="Number of confirmations")
 
-# Loan Management Models  
-class LoanStatusRequest(BaseModel):
-    loan_id: str = Field(..., description="UUID of the loan")
-    
-class LoanStatusResponse(BaseModel):
-    loan_id: str
-    status: str = Field(..., description="Current loan status")
-    bitcoin_transactions: List[Dict[str, Any]] = Field(default_factory=list)
-    pending_signatures: List[Dict[str, Any]] = Field(default_factory=list)
-    next_action: Optional[str] = Field(None, description="Suggested next action")
+
 
 # Preimage Models
 class GeneratePreimageResponse(BaseModel):

@@ -22,7 +22,9 @@ class TestCreateCollateralRequest:
             "escrow_vout": 0,
             "borrower_pubkey": "a" * 64,
             "lender_pubkey": "b" * 64,
+            "preimage_hash_borrower": "c" * 64,
             "preimage_hash_lender": "d" * 64,
+            "borrower_timelock": 100,
             "lender_timelock": 144,
             "collateral_amount": "0.001",
             "origination_fee": "0.0001"
