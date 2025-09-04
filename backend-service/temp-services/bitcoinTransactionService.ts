@@ -1,3 +1,6 @@
+//backend makes calls to python-api for bitcoin transactions
+
+
 import { db } from '../db/connection'
 import { bitcoinTransactions, loans, users, signatures } from '../db/schema'
 import { eq } from 'drizzle-orm'

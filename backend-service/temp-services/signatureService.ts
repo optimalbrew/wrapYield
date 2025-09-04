@@ -75,8 +75,9 @@ export class SignatureService {
     return result[0] || null
   }
 
+
   /**
-   * Get all signatures for a loan
+   * Get all signatures for a loan (for compatibility)
    */
   async getSignaturesForLoan(loanId: string) {
     return await db
@@ -87,8 +88,7 @@ export class SignatureService {
   }
 
   /**
-   * Export signature to JSON file (like our test workflow)
-   * Returns the file path where signature is saved
+   * Export signature to JSON file (for compatibility)
    */
   async exportSignatureToFile(signatureId: string, outputDir: string = './signatures'): Promise<string> {
     const signatureData = await this.getSignature(signatureId)
@@ -97,16 +97,16 @@ export class SignatureService {
       throw new Error(`Signature ${signatureId} not found`)
     }
 
-    const { signature, loan } = signatureData
+    const { signature } = signatureData
 
-    // Create the signature export data (matches our test format)
+    // Create the signature export data
     const exportData = {
       signatureId: signature.id,
       loanId: signature.loanId,
       signatureType: signature.signatureType,
-      sig_borrower: signature.signatureData, // Keep same naming as test
+      sig_borrower: signature.signatureData,
       txid: this.extractTxidFromHex(signature.transactionHex),
-      vout: 0, // Usually 0 for our use case, could be dynamic
+      vout: 0,
       tx_hex: signature.transactionHex,
       input_amount: parseFloat(signature.inputAmount),
       leaf_index: signature.leafIndex,
@@ -115,7 +115,6 @@ export class SignatureService {
       witness_context: signature.witnessContext,
       created_at: signature.createdAt,
       expires_at: signature.expiresAt,
-      // Note: preimage is NOT included for security (lender adds it later)
     }
 
     // Ensure output directory exists
@@ -138,6 +137,32 @@ export class SignatureService {
       .where(eq(signatures.id, signatureId))
 
     return filepath
+  }
+
+  /**
+   * Get signature statistics (for compatibility)
+   */
+  async getSignatureStats() {
+    const stats = await db
+      .select()
+      .from(signatures)
+
+    const statusCounts = stats.reduce((acc: Record<string, number>, sig: any) => {
+      acc[sig.status] = (acc[sig.status] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+
+    const typeCounts = stats.reduce((acc, sig) => {
+      acc[sig.signatureType] = (acc[sig.signatureType] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+
+    return {
+      total: stats.length,
+      byStatus: statusCounts,
+      byType: typeCounts,
+      recentSignatures: stats.slice(-10)
+    }
   }
 
   /**
@@ -187,7 +212,7 @@ export class SignatureService {
     const witnessData = {
       borrowerSignature: borrowerSig.signature.signatureData,
       lenderSignature: lenderSig.signature.signatureData,
-      preimageHex: data.preimageHex, // Provided by lender (not stored in borrower signature)
+      preimageHex: data.preimageHex, // Borrower reveals their preimage on the EVM chain, when accepting a loan.
       tapleafScript: borrowerSig.signature.tapleafScript,
       controlBlock: borrowerSig.signature.controlBlock,
       transactionHex: borrowerSig.signature.transactionHex,
@@ -259,29 +284,4 @@ export class SignatureService {
     return crypto.createHash('sha256').update(txHex).digest('hex')
   }
 
-  /**
-   * Get signature statistics for monitoring
-   */
-  async getSignatureStats() {
-    const stats = await db
-      .select()
-      .from(signatures)
-
-    const statusCounts = stats.reduce((acc: Record<string, number>, sig: any) => {
-      acc[sig.status] = (acc[sig.status] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-
-    const typeCounts = stats.reduce((acc, sig) => {
-      acc[sig.signatureType] = (acc[sig.signatureType] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-
-    return {
-      total: stats.length,
-      byStatus: statusCounts,
-      byType: typeCounts,
-      recentSignatures: stats.slice(-10) // Last 10 signatures
-    }
-  }
 }

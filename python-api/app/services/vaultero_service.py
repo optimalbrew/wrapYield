@@ -380,7 +380,8 @@ class VaulteroService:
         Generate borrower's signature for collateral transaction and save to JSON file.
         
         This method reuses the common transaction creation logic, then generates the borrower's 
-        signature and saves all necessary data to a JSON file.
+        signature and saves all necessary data to a JSON file. It is unusual for an API to save a file
+        but here we assume the borrower is running the python-api locally and saving the file to their machine.
         The lender can later use this file to complete the transaction witness.
         
         Args:
@@ -452,8 +453,8 @@ class VaulteroService:
         """
         Complete the transaction witness using borrower's signature and lender's signature + preimage.
         
-        This method reads the borrower's signature from a JSON file, generates the lender's
-        signature, adds the preimage, and creates the complete witness for broadcasting.
+        This method reads the borrower's signature from a JSON file, generated locally by the borrower and shared with the lender later 
+        The Lender generates own signature, adds the preimage, and creates the complete witness for broadcasting.
         
         Args:
             signature_file_path: Path to the JSON file containing borrower's signature

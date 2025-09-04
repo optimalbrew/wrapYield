@@ -75,7 +75,7 @@ services:
     container_name: btc-yield-backend
     environment:
       NODE_ENV: development
-      PORT: 3001
+      PORT: 3002
       # Database connection
       DATABASE_URL: postgresql://btc_yield_user:btc_yield_password@postgres:5432/btc_yield
       # Redis connection
@@ -83,9 +83,9 @@ services:
       # Python API connection
       PYTHON_API_URL: http://python-api:8001
       # CORS origins
-      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3001"]'
+      CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3002"]'
     ports:
-      - "3001:3001"
+      - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,7 +94,7 @@ services:
       python-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
       interval: 30s
       timeout: 10s
       retries: 3

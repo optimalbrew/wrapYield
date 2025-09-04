@@ -43,7 +43,7 @@ def test_data():
     This matches the pattern used by btc-vaultero tests.
     """
     return {
-        'test_amount': 0.001,  # BTC
+        'test_amount': 0.01,  # BTC
         'borrower_timelock': 100,  # Bitcoin blocks (smaller for testing)
         'lender_timelock': 100,  # Bitcoin blocks (smaller for testing)
         'test_origination_fee': 0.001,  # BTC

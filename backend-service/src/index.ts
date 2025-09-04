@@ -2,17 +2,19 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import dotenv from 'dotenv'
-import { connectDb, runMigrations, healthCheck } from './db/connection'
+import databaseService from './services/databaseService'
+import evmEventMonitor from './services/evmEventMonitor'
 
 // Import API routes
 import signaturesRouter from './api/signatures'
 import bitcoinTransactionsRouter from './api/bitcoin-transactions'
+import bitcoinSignaturesRouter from './api/bitcoinSignatures'
 
 // Load environment variables
 dotenv.config()
 
 const app = express()
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3002
 
 // Middleware
 app.use(helmet()) // Security headers
@@ -41,7 +43,8 @@ app.use((req, res, next) => {
 // Health check endpoint
 app.get('/health', async (req, res) => {
   try {
-    const dbHealth = await healthCheck()
+    const db = databaseService.getDatabase()
+    const dbHealth = db ? true : false
     
     res.json({
       success: true,
@@ -63,6 +66,7 @@ app.get('/health', async (req, res) => {
 // API routes
 app.use('/api/signatures', signaturesRouter)
 app.use('/api/bitcoin-transactions', bitcoinTransactionsRouter)
+app.use('/api/bitcoin/signatures', bitcoinSignaturesRouter)
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -72,7 +76,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       signatures: '/api/signatures',
-      bitcoinTransactions: '/api/bitcoin-transactions'
+      bitcoinTransactions: '/api/bitcoin-transactions',
+      bitcoinSignatures: '/api/bitcoin/signatures'
     },
     documentation: 'https://github.com/your-org/btc-yield-protocol'
   })
@@ -103,8 +108,7 @@ process.on('SIGINT', async () => {
   console.log('\n🔄 Graceful shutdown initiated...')
   
   try {
-    const { closeDb } = await import('./db/connection')
-    await closeDb()
+    await databaseService.close()
     console.log('✅ Graceful shutdown completed')
     process.exit(0)
   } catch (error) {
@@ -118,11 +122,12 @@ async function startServer() {
   try {
     console.log('🚀 Starting BTC Yield Backend Service...')
     
-    // Connect to database
-    await connectDb()
+    // Database is already initialized in the service constructor
+    console.log('✅ Database service initialized')
     
-    // Run migrations (commented out for now - would need proper setup)
-    // await runMigrations()
+    // Start EVM event monitoring
+    await evmEventMonitor.startMonitoring()
+    console.log('✅ EVM event monitoring started')
     
     // Start listening
     app.listen(PORT, () => {
@@ -131,6 +136,7 @@ async function startServer() {
       console.log(`💊 Health check: http://localhost:${PORT}/health`)
       console.log(`📋 Signatures API: http://localhost:${PORT}/api/signatures`)
       console.log(`₿ Bitcoin Transactions API: http://localhost:${PORT}/api/bitcoin-transactions`)
+      console.log(`📁 Bitcoin Signatures API: http://localhost:${PORT}/api/bitcoin/signatures`)
       console.log(`\n📚 Available endpoints:`)
       console.log(`  GET  /health - Service health check`)
       console.log(`  GET  / - API information`)

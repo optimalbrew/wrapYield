@@ -204,3 +204,68 @@ export const insertLoanEventSchema = createInsertSchema(loanEvents)
 export const selectLoanEventSchema = createSelectSchema(loanEvents)
 export type LoanEvent = z.infer<typeof selectLoanEventSchema>
 export type NewLoanEvent = z.infer<typeof insertLoanEventSchema>
+
+// EVM Events table
+export const evmEvents = pgTable('evm_events', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  loanId: uuid('loan_id').notNull().references(() => loans.id),
+  contractAddress: varchar('contract_address', { length: 42 }).notNull(),
+  eventName: varchar('event_name', { length: 100 }).notNull(),
+  eventData: jsonb('event_data').notNull(),
+  blockNumber: bigint('block_number', { mode: 'bigint' }).notNull(),
+  transactionHash: varchar('transaction_hash', { length: 66 }).notNull(),
+  logIndex: integer('log_index').notNull(),
+  processed: boolean('processed').default(false).notNull(),
+  processingStatus: varchar('processing_status', { length: 50 }).default('pending'),
+  processedAt: timestamp('processed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+})
+
+export const insertEvmEventSchema = createInsertSchema(evmEvents)
+export const selectEvmEventSchema = createSelectSchema(evmEvents)
+export type EvmEvent = z.infer<typeof selectEvmEventSchema>
+export type NewEvmEvent = z.infer<typeof insertEvmEventSchema>
+
+// Loan Workflows table
+export const loanWorkflows = pgTable('loan_workflows', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  loanId: uuid('loan_id').notNull().references(() => loans.id),
+  workflowType: varchar('workflow_type', { length: 100 }).notNull(),
+  currentStep: varchar('current_step', { length: 100 }).notNull(),
+  status: varchar('status', { length: 50 }).notNull().default('pending'),
+  stepData: jsonb('step_data'),
+  errorMessage: text('error_message'),
+  retryCount: integer('retry_count').default(0).notNull(),
+  maxRetries: integer('max_retries').default(3).notNull(),
+  nextRetryAt: timestamp('next_retry_at'),
+  completedAt: timestamp('completed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+})
+
+export const insertLoanWorkflowSchema = createInsertSchema(loanWorkflows)
+export const selectLoanWorkflowSchema = createSelectSchema(loanWorkflows)
+export type LoanWorkflow = z.infer<typeof selectLoanWorkflowSchema>
+export type NewLoanWorkflow = z.infer<typeof insertLoanWorkflowSchema>
+
+// Alerts table
+export const alerts = pgTable('alerts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: varchar('name', { length: 200 }).notNull(),
+  severity: varchar('severity', { length: 20 }).notNull(),
+  message: text('message').notNull(),
+  condition: text('condition').notNull(),
+  threshold: decimal('threshold').notNull(),
+  value: decimal('value'),
+  metadata: jsonb('metadata'),
+  triggered: boolean('triggered').default(false).notNull(),
+  triggeredAt: timestamp('triggered_at'),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+})
+
+export const insertAlertSchema = createInsertSchema(alerts)
+export const selectAlertSchema = createSelectSchema(alerts)
+export type Alert = z.infer<typeof selectAlertSchema>
+export type NewAlert = z.infer<typeof insertAlertSchema>

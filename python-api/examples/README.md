@@ -44,6 +44,19 @@ curl -X POST "http://localhost:8001/vaultero/leaf-scripts-output-1" \
   }' | jq
 ```
 
+
+Escrow Address: this must be funded before requesting a loan.
+``` bash
+curl -X POST "http://localhost:8001/vaultero/nums-p2tr-addr-0" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "borrower_pubkey": "02274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+    "lender_pubkey": "0264b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+    "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+    "borrower_timelock": 100
+  }' | jq
+```
+
 ### Collateral Transaction Creation
 
 **File**: `collateral-transaction-response.json`

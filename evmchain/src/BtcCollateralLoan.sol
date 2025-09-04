@@ -381,7 +381,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     ) external payable nonReentrant {
         require(msg.value >= PROCESSING_FEE, "Loan: insuff proc fee");
         require(amount >= MIN_LOAN_AMOUNT, "Loan: amt must be > min");
-        require(bytes(btcAddress).length >= 62 && bytes(btcAddress).length <= 63, "Loan: inval P2TR addr");
+        require(bytes(btcAddress).length >= 62 && bytes(btcAddress).length <= 64, "Loan: inval P2TR addr");
         require(bytes(btcPubkey).length == 64, "Loan: inval BTC pubkey");
         require(borrowerToLoanId[msg.sender] == 0, "Loan: borrower has active loan");
 
