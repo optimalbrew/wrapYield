@@ -41,12 +41,17 @@ RUN useradd --create-home --shell /bin/bash btcyield
 RUN chown -R btcyield:btcyield /app
 USER btcyield
 
-# Expose port
+# Expose port (will be overridden by docker-compose)
+# Note: The 8001 port can be overridden by docker-compose.yml environment variables
+# to allow separate service instances (e.g., borrower-api on port 8002)
 EXPOSE 8001
 
-# Health check
+# Health check (will be overridden by docker-compose)
+# Note: Uses PYTHON_API_PORT environment variable to match the actual service port
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD sh -c "curl -f http://localhost:${PYTHON_API_PORT:-8001}/health || exit 1"
 
-# Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001", "--log-level", "info"]
+# Run the application using environment variables
+# PYTHON_API_PORT environment variable allows docker-compose to override the port
+# for separate lender/borrower service instances
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PYTHON_API_PORT:-8001} --log-level ${PYTHON_API_LOG_LEVEL:-info}"]

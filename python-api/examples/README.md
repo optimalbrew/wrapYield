@@ -57,7 +57,8 @@ curl -X POST "http://localhost:8001/vaultero/nums-p2tr-addr-0" \
   }' | jq
 ```
 
-Funding arbitrary addresses: returns the `txid` and `vout`
+Funding arbitrary addresses: returns the `txid` and `vout`. This is useful to fund the escrow address (`nums_p2tr_addr_0`) and 
+use the returned values when requesting a loan.
 
 ```bash
 curl -X POST http://localhost:8001/bitcoin/fund-address \
@@ -67,9 +68,27 @@ curl -X POST http://localhost:8001/bitcoin/fund-address \
     "amount": 0.001,
     "label": "test-funding"
   }'
+```
+Response Format
+
+```json
+{
+  "success": true,
+  "data": {
+    "txid": "847bc372d76011c07ba1642517f2a8ba98db4f37e585edb7fb67c813d008557a",
+    "vout": 0,
+    "address": "bcrt1qzr7gzh9t38pupar7vq977kmplykf4chwqzv2lp",
+    "amount": 0.001,
+    "label": "test-funding"
+  },
+  "error": null,
+  "message": "Successfully funded address bcrt1qzr7gzh9t38pupar7vq977kmplykf4chwqzv2lp with 0.001 BTC"
+}
 
 ```
-
+The amount to send should account for origination fee (e.g. 1%) as well as bitcoin
+transaction fee. If the amount is not enough for fees, the lender can use CPFP with the origination fee output as the child, since that
+utxo is available to the lender once the escrow has been converted to collateral through the Collateral Transaction.
 
 ### Collateral Transaction Creation
 
@@ -117,14 +136,6 @@ curl -X POST "http://localhost:8001/transactions/collateral" \
 - **Output 0 (btcEscrow)**: `100` Bitcoin blocks (2000 EVM blocks ÷ 20 ratio)
 - **Output 1 (btcCollateral)**: `27150` Bitcoin blocks (543000 EVM blocks ÷ 20 ratio)
 
-## Response Structure
-
-The API returns a structured JSON response with:
-
-- **`success`**: Boolean indicating if the operation succeeded
-- **`data`**: The main response data (varies by endpoint)
-- **`error`**: Error details if the operation failed (null on success)
-- **`message`**: Human-readable status message
 
 ### Leaf Scripts Endpoints
 For leaf scripts endpoints (`/vaultero/leaf-scripts-output-*`), the `data` field contains:
