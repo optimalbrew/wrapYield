@@ -135,6 +135,29 @@ def bitcoin_rpc_setup():
     return bitcoin_rpc
 
 @pytest.fixture(scope="function")
+def funded_wallet(bitcoin_rpc_setup):
+    """Ensure the wallet has sufficient funds for testing.
+    
+    This fixture:
+    - Generates 101 blocks to get mature coins (required for spending)
+    - Verifies wallet balance
+    - Returns the bitcoin_rpc service with funded wallet
+    """
+    import asyncio
+    
+    loop = asyncio.get_event_loop()
+    
+    # Generate 101 blocks to get mature coins (required for spending)
+    print("💰 Generating 101 blocks to get mature coins...")
+    loop.run_until_complete(bitcoin_rpc_setup.generate_blocks(101))
+    
+    # Check wallet balance
+    balance = loop.run_until_complete(bitcoin_rpc_setup.get_balance())
+    print(f"💰 Wallet balance: {balance} BTC")
+    
+    return bitcoin_rpc_setup
+
+@pytest.fixture(scope="function")
 def funded_escrow_address(bitcoin_rpc_setup, test_keys, test_data):
     """Create a funded escrow address for testing.
     
@@ -164,11 +187,13 @@ def funded_escrow_address(bitcoin_rpc_setup, test_keys, test_data):
     
     print(f"Created escrow address: {escrow_address}")
     
-    # Fund the escrow address
-    funding_amount = test_data['test_amount'] + test_data['test_origination_fee'] + 0.0001
-    print(f"Funding escrow address with {funding_amount} BTC")
+    # Fund the escrow address using Decimal for precise arithmetic
+    from decimal import Decimal
+    funding_amount = Decimal(str(test_data['test_amount'])) + Decimal(str(test_data['test_origination_fee'])) + Decimal('0.0001')
+    funding_amount_float = float(funding_amount)
+    print(f"Funding escrow address with {funding_amount_float} BTC")
     
-    funding_txid = bitcoin_rpc_setup.rpc.sendtoaddress(escrow_address, funding_amount)
+    funding_txid = bitcoin_rpc_setup.rpc.sendtoaddress(escrow_address, funding_amount_float)
     print(f"Funding transaction ID: {funding_txid}")
     
     # Generate blocks to confirm the funding transaction
@@ -194,5 +219,5 @@ def funded_escrow_address(bitcoin_rpc_setup, test_keys, test_data):
         'address': escrow_address,
         'txid': funding_txid,
         'vout': escrow_vout,
-        'amount': funding_amount
+        'amount': funding_amount_float
     }

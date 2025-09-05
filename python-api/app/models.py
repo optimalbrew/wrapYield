@@ -129,6 +129,20 @@ class TransactionStatusResponse(BaseModel):
     fee: Optional[Decimal] = None
     status: str = Field(..., description="pending|confirmed|failed")
 
+# Fund Address Models
+class FundAddressRequest(BaseModel):
+    """Request model for funding an address with BTC"""
+    address: str = Field(..., description="Bitcoin address to fund")
+    amount: float = Field(..., gt=0, description="Amount in BTC to send")
+    label: Optional[str] = Field(default=None, description="Optional label for the address")
+
+class FundAddressResponse(BaseModel):
+    """Response model for fund address operation"""
+    txid: str = Field(..., description="Transaction ID of the funding transaction")
+    vout: int = Field(..., ge=0, description="Output index of the funding transaction")
+    address: str = Field(..., description="Address that was funded")
+    amount: float = Field(..., description="Amount sent in BTC")
+
 # Error Models
 class ErrorResponse(BaseModel):
     success: bool = False

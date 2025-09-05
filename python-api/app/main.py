@@ -118,6 +118,13 @@ async def root():
             "preimage": {
                 "generate": "POST /preimage/generate"
             },
+            "bitcoin": {
+                "info": "GET /bitcoin/info",
+                "fund_address": "POST /bitcoin/fund-address",
+                "broadcast": "POST /bitcoin/broadcast",
+                "transaction": "GET /bitcoin/transaction/{txid}",
+                "confirmations": "GET /bitcoin/confirmations/{txid}"
+            }
 
         }
     }
@@ -790,6 +797,37 @@ async def get_confirmations(txid: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get confirmations: {str(e)}"
+        )
+
+@app.post("/bitcoin/fund-address", response_model=APIResponse)
+async def fund_address(request: FundAddressRequest):
+    """
+    Fund a Bitcoin address with BTC using Bitcoin RPC.
+    
+    This endpoint sends BTC from the loaded wallet to the specified address.
+    Useful for testing and development purposes.
+    """
+    try:
+        # Use vaultero service to fund the address
+        txid, vout = await vaultero_service.fund_address(request.address, request.amount)
+        
+        return APIResponse(
+            success=True,
+            data={
+                "txid": txid,
+                "vout": vout,
+                "address": request.address,
+                "amount": request.amount,
+                "label": request.label
+            },
+            message=f"Successfully funded address {request.address} with {request.amount} BTC"
+        )
+        
+    except Exception as e:
+        logger.error("Failed to fund address", address=request.address, amount=request.amount, error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fund address: {str(e)}"
         )
 
 # Regtest-specific endpoints for testing

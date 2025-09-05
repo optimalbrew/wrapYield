@@ -9,7 +9,7 @@ Handles interaction with local Bitcoin Core node for:
 """
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Tuple
 import logging
 from ..config import settings
 
@@ -350,6 +350,45 @@ class BitcoinRPCService:
         except JSONRPCException as e:
             logger.warning(f"Fee estimation failed: {e}")
             return 0.00001  # Default regtest fee
+
+    async def fund_address(self, address: str, amount: float) -> Tuple[str, int]:
+        """
+        Send BTC to an address and return the transaction ID and output index.
+        
+        Args:
+            address: Bitcoin address to send to
+            amount: Amount in BTC to send
+            
+        Returns:
+            Tuple of (txid, vout) where txid is the transaction ID and vout is the output index
+        """
+        try:
+            # Send BTC to the address
+            txid = self.rpc.sendtoaddress(address, amount)
+            logger.info(f"Sent {amount} BTC to {address}, txid: {txid}")
+            
+            # Get transaction details to find the vout
+            tx_details = self.rpc.gettransaction(txid)
+            
+            # Find the output that went to our target address
+            vout = None
+            for detail in tx_details.get('details', []):
+                if detail.get('address') == address:
+                    vout = detail.get('vout')
+                    break
+            
+            if vout is None:
+                raise ValueError(f"Could not find output for address {address} in transaction {txid}")
+            
+            logger.info(f"Found UTXO at vout: {vout}")
+            return txid, vout
+            
+        except JSONRPCException as e:
+            logger.error(f"RPC error funding address {address}: {e}")
+            raise Exception(f"Failed to fund address: {e}")
+        except Exception as e:
+            logger.error(f"Error funding address {address}: {e}")
+            raise Exception(f"Failed to fund address: {e}")
 
 # Global service instance
 bitcoin_rpc = BitcoinRPCService()

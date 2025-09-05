@@ -57,6 +57,20 @@ curl -X POST "http://localhost:8001/vaultero/nums-p2tr-addr-0" \
   }' | jq
 ```
 
+Funding arbitrary addresses: returns the `txid` and `vout`
+
+```bash
+curl -X POST http://localhost:8001/bitcoin/fund-address \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "bcrt1qzr7gzh9t38pupar7vq977kmplykf4chwqzv2lp",
+    "amount": 0.001,
+    "label": "test-funding"
+  }'
+
+```
+
+
 ### Collateral Transaction Creation
 
 **File**: `collateral-transaction-response.json`

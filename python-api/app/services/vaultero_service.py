@@ -25,8 +25,7 @@ try:
         get_nums_p2tr_addr_0,
         get_nums_p2tr_addr_1,
         create_collateral_lock_tx,
-        create_collateral_release_tx,
-        fund_address
+        create_collateral_release_tx
     )
     VAULTERO_AVAILABLE = True
 except ImportError as e:
@@ -255,6 +254,27 @@ class VaulteroService:
         except Exception as e:
             raise Exception(f"Failed to get NUMS P2TR_1 address: {str(e)}")
     
+    async def fund_address(self, address: str, amount: float) -> Tuple[str, int]:
+        """
+        Fund an address with BTC using Bitcoin RPC.
+        
+        Args:
+            address: Bitcoin address to fund
+            amount: Amount in BTC to send
+            
+        Returns:
+            Tuple of (txid, vout) where txid is the transaction ID and vout is the output index
+        """
+        try:
+            from .bitcoin_rpc_service import bitcoin_rpc
+            
+            # Use Bitcoin RPC to send BTC to the address
+            txid, vout = await bitcoin_rpc.fund_address(address, amount)
+            
+            return txid, vout
+            
+        except Exception as e:
+            raise Exception(f"Failed to fund address: {str(e)}")
 
     async def _create_collateral_transaction_data(self, request: CreateCollateralRequest):
         """

@@ -1038,3 +1038,34 @@ class TestBitcoinRPCService:
         # Report results
         passed_tests = [name for name, success in results if success is True]
         print(f"✅ All connection health checks passed: {passed_tests}")
+    
+    @pytest.mark.asyncio
+    async def test_fund_address(self, funded_wallet):
+        """Test funding an address with BTC using real Bitcoin RPC."""
+        try:
+            # Generate a real test address
+            test_address = await funded_wallet.get_new_address("test_funding")
+            test_amount = 0.001  # 0.001 BTC
+            
+            print(f"📝 Testing with address: {test_address}")
+            print(f"📝 Amount: {test_amount} BTC")
+            
+            # Call the fund_address method with real RPC
+            txid, vout = await funded_wallet.fund_address(test_address, test_amount)
+            
+            # Verify the result
+            assert isinstance(txid, str)
+            assert isinstance(vout, int)
+            assert len(txid) == 64  # Bitcoin txid length
+            assert vout >= 0  # Valid vout index
+            
+            print(f"✅ fund_address test passed: txid={txid}, vout={vout}")
+            
+            # Verify the transaction exists
+            tx_info = await funded_wallet.get_transaction_info(txid)
+            assert tx_info is not None
+            print(f"✅ Transaction verified: {tx_info.get('txid', 'unknown')}")
+            
+        except Exception as e:
+            print(f"❌ fund_address test failed: {e}")
+            raise
