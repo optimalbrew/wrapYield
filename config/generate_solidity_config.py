@@ -85,8 +85,8 @@ library ProtocolConfig {{
     /// @dev Maximum loan amount: {limits.get('maxLoanAmount', {}).get('value', '100')} ether ({limits.get('maxLoanAmount', {}).get('description', '')})
     uint256 internal constant MAX_LOAN_AMOUNT = {wei_value(limits.get('maxLoanAmount', {}).get('value', '100'))};
     
-    /// @dev Origination fee: {fees.get('originationFee', {}).get('percentage', 1)}% (expressed as divisor: {fees.get('originationFee', {}).get('divisor', 1000)})
-    uint256 internal constant ORIGIN_FEE_PERCENTAGE_DIVISOR = {fees.get('originationFee', {}).get('divisor', 1000)};
+    /// @dev Origination fee: {fees.get('originationFee', {}).get('percentage', 1)}% 
+    uint256 internal constant ORIGIN_FEE_PERCENTAGE = {fees.get('originationFee', {}).get('percentage', 1)};
     
     /// @dev Lender bond percentage: {fees.get('lenderBondPercentage', {}).get('percentage', 10)}%
     uint256 internal constant LENDER_BOND_PERCENTAGE = {fees.get('lenderBondPercentage', {}).get('percentage', 10)};
@@ -202,8 +202,8 @@ library ProtocolConfig {{
         return MAX_LOAN_AMOUNT;
     }}
     
-    function getOriginFeePercentageDivisor() internal pure returns (uint256) {{
-        return ORIGIN_FEE_PERCENTAGE_DIVISOR;
+    function getOriginFeePercentage() internal pure returns (uint256) {{
+        return ORIGIN_FEE_PERCENTAGE;
     }}
     
     function getLenderBondPercentage() internal pure returns (uint256) {{
@@ -272,7 +272,7 @@ library ProtocolConfig {{
      * @return Fee amount in wei
      */
     function calculateOriginationFee(uint256 loanAmount) internal pure returns (uint256) {{
-        return loanAmount / ORIGIN_FEE_PERCENTAGE_DIVISOR;
+        return (loanAmount * ORIGIN_FEE_PERCENTAGE) / 100;
     }}
     
     /**
@@ -432,7 +432,7 @@ def main():
     
     print(f"   Processing Fee: {processing_fee} ether")
     print(f"   Min Loan Amount: {min_loan} ether")
-    print(f"   Origination Fee Divisor: {fees.get('originationFee', {}).get('divisor', 1000)}")
+    print(f"   Origination Fee Percentage: {fees.get('originationFee', {}).get('percentage', 1)}%")
     print("✅ Generation complete!")
 
 if __name__ == "__main__":

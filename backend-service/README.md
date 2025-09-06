@@ -42,12 +42,6 @@ npm install
 # Start databases
 npm run docker:up
 
-# Copy environment configuration
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-```
 
 ### 3. Development
 

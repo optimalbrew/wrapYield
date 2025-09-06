@@ -22,6 +22,10 @@ def test_keys():
     """
     borrower_priv = PrivateKey("cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz")
     lender_priv = PrivateKey("cMrC8dGmStj3pz7mbY3vjwhXYcQwkcaWwV4QFCTF25WwVW1TCDkJ")
+
+    # Computed public keys (hex format) for API testing:
+    # borrower_pub_hex = "02274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa"
+    # lender_pub_hex = "0264b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8"
     
     borrower_pub = borrower_priv.get_public_key()
     lender_pub = lender_priv.get_public_key()

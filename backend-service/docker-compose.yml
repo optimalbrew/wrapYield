@@ -85,6 +85,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: btc-yield-backend
+    env_file:
+      - .env  # Load environment variables from .env file
     environment:
       NODE_ENV: development
       PORT: 3002
@@ -94,6 +96,11 @@ services:
       PYTHON_API_URL: http://python-api:8001
       # CORS origins
       CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3002"]'
+      # Contract addresses (loaded from .env file)
+      ETHER_SWAP_ADDRESS: ${ETHER_SWAP_ADDRESS}
+      BTC_COLLATERAL_LOAN_ADDRESS: ${BTC_COLLATERAL_LOAN_ADDRESS}
+      # Anvil RPC URL
+      ANVIL_RPC_URL: ${ANVIL_RPC_URL}
     ports:
       - "3002:3002"
     depends_on:

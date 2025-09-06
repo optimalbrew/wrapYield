@@ -97,7 +97,7 @@
       "supported": ["p2tr"],
       "p2tr": {
         "minLength": 62,
-        "maxLength": 63,
+        "maxLength": 64,
         "description": "Pay-to-Taproot address format"
       }
     },
@@ -160,10 +160,6 @@
 
   "security": {
     "maxActiveLoansPerBorrower": 1,
-    "lenderSlashingEnabled": true,
-    "emergencyPause": {
-      "enabled": false,
-      "description": "Emergency pause mechanism for contract operations"
-    }
+    "lenderSlashingEnabled": true
   }
 }

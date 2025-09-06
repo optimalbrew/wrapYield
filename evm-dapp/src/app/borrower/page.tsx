@@ -188,6 +188,15 @@ export default function BorrowerPage() {
   const [txidP2tr0, setTxidP2tr0] = useState<`0x${string}`>('0xef71afe3b2f77a78c44843db2f0ab151b8fb0c298403e3634869ab65b8f677a4')
   const [voutP2tr0, setVoutP2tr0] = useState('0')
 
+  // Prepare Collateral state
+  const [prepareCollateralData, setPrepareCollateralData] = useState({
+    loanAmount: '',
+    btcPubkey: '',
+    preimageHash: ''
+  })
+  const [collateralResult, setCollateralResult] = useState<any>(null)
+  const [isPreparingCollateral, setIsPreparingCollateral] = useState(false)
+
   // Validation functions
   const isValidHexString = (value: string): value is `0x${string}` => {
     return value.startsWith('0x') && /^0x[0-9a-fA-F]+$/.test(value)
@@ -196,6 +205,47 @@ export default function BorrowerPage() {
   const setValidHexString = (value: string, setter: (value: `0x${string}`) => void) => {
     if (isValidHexString(value)) {
       setter(value)
+    }
+  }
+
+  // Prepare Collateral handler
+  const handlePrepareCollateral = async () => {
+    if (!prepareCollateralData.loanAmount || !prepareCollateralData.btcPubkey || !prepareCollateralData.preimageHash) {
+      alert('Please fill in all fields')
+      return
+    }
+
+    setIsPreparingCollateral(true)
+    try {
+      const response = await fetch('http://localhost:3002/api/prepare-collateral', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          loanAmount: parseFloat(prepareCollateralData.loanAmount),
+          borrowerBtcPubkey: prepareCollateralData.btcPubkey,
+          preimageHashBorrower: prepareCollateralData.preimageHash
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        setCollateralResult(data.data)
+        // Auto-populate the loan request form with the prepared data
+        setLoanAmount(data.data.loanRequestData.amount)
+        setBtcAddress(data.data.loanRequestData.btcAddress)
+        setBorrowerBtcPubkey(data.data.loanRequestData.btcPubkey)
+        setPreimageHashBorrower(data.data.loanRequestData.preimageHashBorrower)
+      } else {
+        alert(`Error: ${data.message || 'Failed to prepare collateral'}`)
+      }
+    } catch (error) {
+      console.error('Error preparing collateral:', error)
+      alert('Failed to prepare collateral. Please check if the backend service is running.')
+    } finally {
+      setIsPreparingCollateral(false)
     }
   }
 
@@ -470,7 +520,7 @@ export default function BorrowerPage() {
             {/* Loan Statistics */}
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
               <div className="text-sm text-emerald-800">
-                <div className="font-medium">Total Loans: {totalLoans ? Number(totalLoans) : 0}</div>
+                <div className="font-medium">Total Loans: {totalLoans !== undefined ? Number(totalLoans) : 0}</div>
                 <div className="font-medium mt-1">Processing Fee: 0.001 ETH</div>
                 <div className="font-medium mt-1">Minimum Loan Amount: 0.005 ETH</div>
                 <button
@@ -558,7 +608,7 @@ export default function BorrowerPage() {
                 <div>Network: {account.chainId} {account.chainId === 31337 ? '(Anvil)' : '(Wrong Network)'}</div>
                 <div>Contract Address: {CONTRACTS.BTC_COLLATERAL_LOAN || 'Not set'}</div>
                 <div>Account Address: {account.addresses?.[0] || 'Not connected'}</div>
-                <div>Total Loans Data: {totalLoans ? Number(totalLoans) : 'Loading...'}</div>
+                <div>Total Loans Data: {totalLoans !== undefined ? Number(totalLoans) : 'Loading...'}</div>
                 <div>Contract Owner: {contractOwner || 'Loading...'}</div>
                 <div>Owner Error: {ownerError ? ownerError.message : 'None'}</div>
                 <div>Loan Error: {loanError ? loanError.message : 'None'}</div>
@@ -676,6 +726,101 @@ export default function BorrowerPage() {
           </div>
         )}
 
+        {/* Prepare Collateral Section */}
+        {account.status === 'connected' && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">📋 Step 1: Prepare Collateral</h2>
+            <p className="text-gray-600 mb-6">
+              Enter your loan details to get the escrow address where you need to send BTC to be used as collateral.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (ETH)</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={prepareCollateralData.loanAmount}
+                  onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, loanAmount: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Your x-only BTC Public Key (64 chars)</label>
+                <input
+                  type="text"
+                  value={prepareCollateralData.btcPubkey}
+                  onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, btcPubkey: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8"
+                  maxLength={64}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Your Preimage Hash (66 chars starting with 0x)</label>
+                <input
+                  type="text"
+                  value={prepareCollateralData.preimageHash}
+                  onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, preimageHash: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="0x..."
+                />
+              </div>
+            </div>
+            
+            <button
+              onClick={handlePrepareCollateral}
+              disabled={isPreparingCollateral || !prepareCollateralData.loanAmount || !prepareCollateralData.btcPubkey || !prepareCollateralData.preimageHash}
+              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+            >
+              {isPreparingCollateral ? 'Preparing...' : 'Prepare Collateral'}
+            </button>
+
+            {/* Collateral Results */}
+            {collateralResult && (
+              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                <h3 className="text-lg font-semibold text-green-800 mb-4">✅ Collateral Information Ready</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-medium text-green-700 mb-2">💰 Amount Breakdown</h4>
+                    <div className="space-y-1 text-sm text-green-600">
+                      <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{collateralResult.loanAmount.eth} ETH</code></div>
+                      <div>Origination Fee ({collateralResult.originationFeePercentage}%): <code className="bg-green-100 px-1 rounded">{collateralResult.originationFee.eth} ETH</code></div>
+                      <div>Total Required: <code className="bg-green-100 px-1 rounded">{collateralResult.totalAmount.eth} ETH</code></div>
+                      <div className="font-medium">Suggested Total: <code className="bg-green-100 px-1 rounded">{collateralResult.suggestedTotal.btc} BTC</code> (+200 sats for fees)</div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium text-green-700 mb-2">📍 Bitcoin Address (Escrow Output)</h4>
+                    <div className="text-sm text-green-600">
+                      <div className="font-mono break-all bg-green-100 p-2 rounded">
+                        {collateralResult.bitcoinAddress}
+                      </div>
+                      <div className="mt-2 text-xs text-green-500">
+                        Send at least <strong>{collateralResult.suggestedTotal.btc} BTC</strong> to this address
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <h4 className="font-medium text-blue-800 mb-2">📋 Next Steps</h4>
+                  <div className="text-sm text-blue-700 space-y-1">
+                    <div>1. Send {collateralResult.suggestedTotal.btc} BTC to the address above</div>
+                    <div>2. Wait for confirmation (6+ blocks recommended)</div>
+                    <div>3. Note the transaction ID and output index</div>. Using the python-api locally, you can verify the address. 
+                    You can also use it to fund the address and get the transaction ID and output index.
+                    <div>4. Use the "Request Loan" form below with the prepared values</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Borrower Functions */}
         {account.status === 'connected' && CONTRACTS.BTC_COLLATERAL_LOAN && (
           <div className="space-y-8">
@@ -696,7 +841,7 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">BTC Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">BTC Address (Escrow Output)</label>
                 <input
                   type="text"
                   value={btcAddress}
@@ -708,7 +853,7 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Your BTC Schnorr Public Key (64 characters)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Your x-only BTC Public Key (64 characters)</label>
                 <input
                   type="text"
                   value={borrowerBtcPubkey}
@@ -721,7 +866,7 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Preimage Hash</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Preimage Hash (66 chars starting with 0x)</label>
                 <input
                   type="text"
                   value={preimageHashBorrower}
@@ -734,7 +879,7 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Bitcoin Transaction ID (txid_p2tr0)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bitcoin Transaction ID (txid, 64 chars starting with 0x)</label>
                 <input
                   type="text"
                   value={txidP2tr0}
@@ -747,7 +892,7 @@ export default function BorrowerPage() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Output Index (vout_p2tr0)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Output Index (vout, integer)</label>
                 <input
                   type="number"
                   value={voutP2tr0}
@@ -785,7 +930,7 @@ export default function BorrowerPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Lender Preimage Hash</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Lender Preimage Hash (66 chars starting with 0x)</label>
                   <input
                     type="text"
                     value={preimageHashLender}
@@ -796,7 +941,7 @@ export default function BorrowerPage() {
                   <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Your Preimage</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Your Preimage (66 chars starting with 0x)</label>
                   <input
                     type="text"
                     value={preimageBorrower}
@@ -841,18 +986,18 @@ export default function BorrowerPage() {
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <h4 className="font-medium text-gray-800 mb-2">Current Configuration</h4>
                   <div className="text-sm text-gray-600 space-y-1">
-                    <div>• Loan Duration: {CONTRACT_CONFIG.LOAN_DURATION} blocks</div>
-                    <div>• Timelock Loan Request: {CONTRACT_CONFIG.TIMELOCK_LOAN_REQ} blocks</div>
-                    <div>• Timelock BTC Escrow: {CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW} blocks</div>
-                    <div>• Timelock Repayment Accept: {CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT} blocks</div>
-                    <div>• Timelock BTC Collateral: {CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL} blocks</div>
+                    <div>• Loan Duration: {CONTRACT_CONFIG.LOAN_DURATION} Rootstock blocks</div>
+                    <div>• Timelock Loan Request: {CONTRACT_CONFIG.TIMELOCK_LOAN_REQ} Rootstock blocks</div>
+                    <div>• Timelock BTC Escrow: {CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW} Rootstock blocks</div>
+                    <div>• Timelock Repayment Accept: {CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT} Rootstock blocks</div>
+                    <div>• Timelock BTC Collateral: {CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL} Rootstock blocks</div>
                   </div>
                 </div>
                 
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <h4 className="font-medium text-gray-800 mb-2">Loan Process</h4>
                   <div className="text-sm text-gray-600 space-y-1">
-                    <div>1. Request loan with BTC public key</div>
+                    <div>1. Request loan with x-only BTC public key</div>
                     <div>2. Wait for lender offer</div>
                     <div>3. Accept offer to activate loan</div>
                     <div>4. Repay loan when due</div>
@@ -868,7 +1013,7 @@ export default function BorrowerPage() {
         <div className="bg-green-50 rounded-xl p-6 mt-8">
           <h2 className="text-xl font-semibold mb-4 text-green-900">Borrower Instructions</h2>
           <div className="text-green-800 space-y-2">
-            <div>1. <strong>Request Loan</strong>: Submit a loan request with your BTC public key and desired amounts</div>
+            <div>1. <strong>Request Loan</strong>: Submit a loan request with your x-only BTC public key and desired amounts</div>
             <div>2. <strong>Wait for Offer</strong>: Lenders will review and offer loans to your request</div>
             <div>3. <strong>Accept Offer</strong>: Accept a loan offer to activate the loan</div>
             <div>4. <strong>Manage Repayment</strong>: Attempt repayment when the loan is due</div>

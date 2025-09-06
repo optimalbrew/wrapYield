@@ -43,8 +43,8 @@ export const CONTRACT_CONFIG = {
   LENDER_BOND_PERCENTAGE: getFee('lenderBondPercentage'),
 } as const
 
-// Bitcoin public key placeholder: x_only pubkey (64 characters length - 32 bytes)
-export const BTC_PUBKEY_PLACEHOLDER = '0x1234567890123456789012345678901234567890123456789012345678901234'
+// Lender's Bitcoin public key placeholder: x_only pubkey (64 characters length - 32 bytes)
+export const BTC_PUBKEY_PLACEHOLDER = '64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8'
 
 // Network configuration
 export const NETWORK_CONFIG = {

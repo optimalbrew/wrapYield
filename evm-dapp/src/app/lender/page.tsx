@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useConnect, useDisconnect, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseEther, formatEther } from 'viem'
 import { BTC_COLLATERAL_LOAN_ABI, CONTRACTS } from '@/contracts'
-import { CONTRACT_CONFIG, NETWORK_CONFIG } from '@/constants'
+import { CONTRACT_CONFIG, NETWORK_CONFIG, BTC_PUBKEY_PLACEHOLDER } from '@/constants'
 import Link from 'next/link'
 import { useWalletValidation } from '@/hooks/useWalletValidation'
 import { switchToAnvil } from '@/utils/networkUtils'
@@ -110,10 +110,17 @@ export default function LenderPage() {
     }
   }, [CONTRACTS.BTC_COLLATERAL_LOAN, account.status]) // Removed totalLoans from dependency array
 
+  // Update BTC pubkey form with current value from contract when available
+  useEffect(() => {
+    if (lenderBtcPubkey && lenderBtcPubkey !== '') {
+      setNewBtcPubkey(lenderBtcPubkey)
+    }
+  }, [lenderBtcPubkey])
+
 
 
   // Form state
-  const [newBtcPubkey, setNewBtcPubkey] = useState('1234567890123456789012345678901234567890123456789012345678901234')
+  const [newBtcPubkey, setNewBtcPubkey] = useState(BTC_PUBKEY_PLACEHOLDER)
   const [selectedLoanId, setSelectedLoanId] = useState('0')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
@@ -553,6 +560,15 @@ export default function LenderPage() {
             {/* Update BTC Public Key */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Update BTC Public Key</h3>
+              
+              {/* Current BTC Public Key Display */}
+              {lenderBtcPubkey && lenderBtcPubkey !== '' && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm font-medium text-blue-800 mb-1">Current BTC Public Key (stored on chain):</div>
+                  <div className="text-xs text-blue-700 font-mono break-all">{lenderBtcPubkey}</div>
+                </div>
+              )}
+              
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">New BTC Schnorr Public Key (64 characters)</label>
                 <input
@@ -563,7 +579,7 @@ export default function LenderPage() {
                   placeholder="Enter 64-character BTC public key..."
                   maxLength={64}
                 />
-                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
+                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters (32 bytes as hex)</p>
               </div>
               <button
                 onClick={handleUpdateBtcPubkey}
@@ -817,7 +833,7 @@ export default function LenderPage() {
                   <div>Contract Address: <code className="bg-purple-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
                   <div>Network: <code className="bg-purple-100 px-1 rounded">{account.chainId === NETWORK_CONFIG.ANVIL.chainId ? `Anvil (${NETWORK_CONFIG.ANVIL.chainId})` : `Chain ID: ${account.chainId}`}</code></div>
                   <div>Wallet Connected: <code className="bg-purple-100 px-1 rounded">{account.status === 'connected' ? '✅ Yes' : '❌ No'}</code></div>
-                  <div>Total Loans: <code className="bg-purple-100 px-1 rounded">{totalLoans ? Number(totalLoans) : 'Loading...'}</code></div>
+                  <div>Total Loans: <code className="bg-purple-100 px-1 rounded">{totalLoans !== undefined ? Number(totalLoans) : 'Loading...'}</code></div>
                   <div>Account Nonce: <code className="bg-purple-100 px-1 rounded">{accountNonce !== null ? accountNonce : 'Click Refresh'}</code></div>
                 </div>
                 <button

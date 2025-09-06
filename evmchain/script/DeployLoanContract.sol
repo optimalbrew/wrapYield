@@ -12,7 +12,7 @@ contract DeployScript is Script {
     function run() external {
         vm.startBroadcast();        
         // actual pubkeyvalidity is not checked
-        string memory lenderBtcPubkey = "1234567890123456789012345678901234567890123456789012345678901234";
+        string memory lenderBtcPubkey = "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8";
         //print the length of the lenderBtcPubkey
         //console.log("Lender BTC pubkey length: ", bytes(lenderBtcPubkey).length);
         
