@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     bitcoin_rpc_user: str = "bitcoin"  # Match Bitcoin Core container credentials
     bitcoin_rpc_password: str = "localtest"  # Match Bitcoin Core container credentials
     bitcoin_rpc_timeout: int = 30
+    bitcoin_wallet_name: str = "python-api-test"  # Wallet name for this service instance
     
     # External services (not needed for regtest, but kept for compatibility)
     mempool_api_url: str = "http://localhost:8080/api"  # Local mempool instance if any

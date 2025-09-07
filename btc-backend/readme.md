@@ -5,8 +5,13 @@ Not meant for use in production. RPC passwords are the common test values.
 Start (or restart) the service with 
 
 ```
-docker compose up
+docker compose up -d
 ```
+
+SOme basic examples follow. For testing the backend api, there is a script `setup-wallets.sh` that ensures
+a couple of wallets are loaded and funded. This needs to be run whenever we are starting bitcoind with from
+scratch or when we have deleted existing data (in `data/bitcoin/regtest`)
+
 
 Verify it's working (not needed, since we have enabled `printtoconsole` for logs)
 

@@ -35,6 +35,8 @@ services:
       PYTHON_API_BITCOIN_RPC_PORT: 18443
       PYTHON_API_BITCOIN_RPC_USER: bitcoin
       PYTHON_API_BITCOIN_RPC_PASSWORD: localtest
+      # Wallet name for this service
+      PYTHON_API_BITCOIN_WALLET_NAME: python-api-test
     volumes:
       - ../btc-vaultero/src:/app/btc-vaultero/src:ro  # Mount only btc-vaultero source code at runtime
       - ../python-api/examples:/app/examples  # Mount examples directory for signature files
@@ -66,6 +68,8 @@ services:
       PYTHON_API_BITCOIN_RPC_PORT: 18443
       PYTHON_API_BITCOIN_RPC_USER: bitcoin
       PYTHON_API_BITCOIN_RPC_PASSWORD: localtest
+      # Wallet name for this service
+      PYTHON_API_BITCOIN_WALLET_NAME: borrower-api-test
     volumes:
       - ../btc-vaultero/src:/app/btc-vaultero/src:ro  # Mount only btc-vaultero source code at runtime
       - ../python-api/examples:/app/examples  # Mount examples directory for signature files

@@ -52,34 +52,35 @@ class BitcoinRPCService:
     def _initialize_wallet(self):
         """Initialize wallet for testing if none exists."""
         try:
+            wallet_name = settings.bitcoin_wallet_name
             # Check if any wallets exist
             wallets = self._rpc_connection.listwallets()
             
             if not wallets:
                 # No wallets exist, create a new one
-                logger.info("No wallets found, creating 'py-api-test' wallet")
-                self._rpc_connection.createwallet("py-api-test")
+                logger.info(f"No wallets found, creating '{wallet_name}' wallet")
+                self._rpc_connection.createwallet(wallet_name)
                 self._wallet_initialized = True
-                logger.info("Successfully created 'py-api-test' wallet")
+                logger.info(f"Successfully created '{wallet_name}' wallet")
                 
-            elif "py-api-test" not in wallets:
-                # py-api-test wallet doesn't exist, create it
-                logger.info("Creating 'py-api-test' wallet")
-                self._rpc_connection.createwallet("py-api-test")
+            elif wallet_name not in wallets:
+                # wallet doesn't exist, create it
+                logger.info(f"Creating '{wallet_name}' wallet")
+                self._rpc_connection.createwallet(wallet_name)
                 self._wallet_initialized = True
-                logger.info("Successfully created 'py-api-test' wallet")
+                logger.info(f"Successfully created '{wallet_name}' wallet")
                 
             else:
-                # py-api-test wallet exists, load it
-                logger.info("Loading existing 'py-api-test' wallet")
-                self._rpc_connection.loadwallet("py-api-test")
+                # wallet exists, load it
+                logger.info(f"Loading existing '{wallet_name}' wallet")
+                self._rpc_connection.loadwallet(wallet_name)
                 self._wallet_initialized = True
-                logger.info("Successfully loaded 'py-api-test' wallet")
+                logger.info(f"Successfully loaded '{wallet_name}' wallet")
             
             # Update RPC URL to use wallet-specific endpoint
             self.rpc_url = (
                 f"http://{settings.bitcoin_rpc_user}:{settings.bitcoin_rpc_password}@"
-                f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/py-api-test"
+                f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/{wallet_name}"
             )
             # Recreate RPC connection with wallet-specific URL
             self._rpc_connection = AuthServiceProxy(
@@ -92,13 +93,14 @@ class BitcoinRPCService:
                 self._ensure_initial_blocks()
                 
         except JSONRPCException as e:
+            wallet_name = settings.bitcoin_wallet_name
             if e.error['code'] == -4:  # Wallet already loaded
-                logger.info("Wallet 'py-api-test' is already loaded")
+                logger.info(f"Wallet '{wallet_name}' is already loaded")
                 self._wallet_initialized = True
                 # Update RPC URL to use wallet-specific endpoint
                 self.rpc_url = (
                     f"http://{settings.bitcoin_rpc_user}:{settings.bitcoin_rpc_password}@"
-                    f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/py-api-test"
+                    f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/{wallet_name}"
                 )
                 # Recreate RPC connection with wallet-specific URL
                 self._rpc_connection = AuthServiceProxy(
@@ -106,15 +108,15 @@ class BitcoinRPCService:
                     timeout=settings.bitcoin_rpc_timeout
                 )
             elif e.error['code'] == -35:  # Wallet already exists
-                logger.info("Wallet 'py-api-test' already exists, loading it")
+                logger.info(f"Wallet '{wallet_name}' already exists, loading it")
                 try:
-                    self._rpc_connection.loadwallet("py-api-test")
+                    self._rpc_connection.loadwallet(wallet_name)
                     self._wallet_initialized = True
-                    logger.info("Successfully loaded existing 'py-api-test' wallet")
+                    logger.info(f"Successfully loaded existing '{wallet_name}' wallet")
                     # Update RPC URL to use wallet-specific endpoint
                     self.rpc_url = (
                         f"http://{settings.bitcoin_rpc_user}:{settings.bitcoin_rpc_password}@"
-                        f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/py-api-test"
+                        f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/{wallet_name}"
                     )
                     # Recreate RPC connection with wallet-specific URL
                     self._rpc_connection = AuthServiceProxy(
@@ -127,13 +129,13 @@ class BitcoinRPCService:
             elif e.error['code'] == -18:  # Wallet file verification failed (database doesn't exist)
                 logger.info("Wallet database file doesn't exist, creating new wallet")
                 try:
-                    self._rpc_connection.createwallet("py-api-test")
+                    self._rpc_connection.createwallet(wallet_name)
                     self._wallet_initialized = True
-                    logger.info("Successfully created new 'py-api-test' wallet after database error")
+                    logger.info(f"Successfully created new '{wallet_name}' wallet after database error")
                     # Update RPC URL to use wallet-specific endpoint
                     self.rpc_url = (
                         f"http://{settings.bitcoin_rpc_user}:{settings.bitcoin_rpc_password}@"
-                        f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/py-api-test"
+                        f"{settings.bitcoin_rpc_host}:{settings.bitcoin_rpc_port}/wallet/{wallet_name}"
                     )
                     # Recreate RPC connection with wallet-specific URL
                     self._rpc_connection = AuthServiceProxy(

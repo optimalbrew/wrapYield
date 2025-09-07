@@ -97,22 +97,23 @@ def bitcoin_rpc_setup():
         wallets = rpc_conn.listwallets()
         print(f"Existing wallets: {wallets}")
         
-        if not wallets or "py-api-test" not in wallets:
-            print("Creating py-api-test wallet...")
+        wallet_name = "python-api-test"  # Use the same wallet name as the service
+        if not wallets or wallet_name not in wallets:
+            print(f"Creating {wallet_name} wallet...")
             try:
-                rpc_conn.createwallet("py-api-test")
+                rpc_conn.createwallet(wallet_name)
                 print("Wallet created successfully")
             except Exception as create_error:
                 if "Database already exists" in str(create_error):
                     print("Wallet database exists, loading it...")
-                    rpc_conn.loadwallet("py-api-test")
+                    rpc_conn.loadwallet(wallet_name)
                     print("Wallet loaded successfully")
                 else:
                     raise create_error
         else:
-            print("Loading existing py-api-test wallet...")
+            print(f"Loading existing {wallet_name} wallet...")
             try:
-                rpc_conn.loadwallet("py-api-test")
+                rpc_conn.loadwallet(wallet_name)
                 print("Wallet loaded successfully")
             except Exception as load_error:
                 if "Unable to obtain an exclusive lock" in str(load_error):
