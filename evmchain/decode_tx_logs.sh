@@ -1,5 +1,7 @@
 #!/bin/bash
 
+### OUTDATED SCRIPT .. works for some, but only for indexed fields, misses out on string fields
+
 # Transaction Log Decoder for btcyield contracts
 # Usage: ./decode_tx_logs.sh <transaction_hash> [rpc_url]
 # Run from evmchain directory or use: ../evmchain/decode_tx_logs.sh <tx_hash>

@@ -7,4 +7,5 @@ declare global {
   }
 }
 
-export {}
+// Re-export Express types to avoid conflicts
+export * from 'express'

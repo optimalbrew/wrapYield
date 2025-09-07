@@ -40,32 +40,38 @@ export default function LenderPage() {
   // Contract interaction functions
   const { writeContract: updateBtcPubkey, isPending: updatePubkeyLoading, data: updatePubkeyHash } = useWriteContract()
   const { writeContract: updateParameters, isPending: updateParamsLoading, data: updateParamsHash } = useWriteContract()
+  const { writeContract: associatePreimageHash, isPending: associateLoading, data: associateHash } = useWriteContract()
   const { writeContract: extendLoanOffer, isPending: offerLoading, data: extendOfferHash } = useWriteContract()
   const { writeContract: acceptRepayment, isPending: acceptRepaymentLoading, data: acceptRepaymentHash } = useWriteContract()
   const { writeContract: markAsDefaulted, isPending: defaultLoading, data: markAsDefaultedHash } = useWriteContract()
 
   // Transaction monitoring
-  const { isLoading: isUpdatePubkeyConfirming, isSuccess: isUpdatePubkeySuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isUpdatePubkeyConfirming, isSuccess: isUpdatePubkeySuccess, isError: isUpdatePubkeyError } = useWaitForTransactionReceipt({
     hash: updatePubkeyHash,
     query: { enabled: !!updatePubkeyHash }
   })
   
-  const { isLoading: isUpdateParamsConfirming, isSuccess: isUpdateParamsSuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isUpdateParamsConfirming, isSuccess: isUpdateParamsSuccess, isError: isUpdateParamsError } = useWaitForTransactionReceipt({
     hash: updateParamsHash,
     query: { enabled: !!updateParamsHash }
   })
   
-  const { isLoading: isExtendOfferConfirming, isSuccess: isExtendOfferSuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isAssociateConfirming, isSuccess: isAssociateSuccess, isError: isAssociateError } = useWaitForTransactionReceipt({
+    hash: associateHash,
+    query: { enabled: !!associateHash }
+  })
+  
+  const { isLoading: isExtendOfferConfirming, isSuccess: isExtendOfferSuccess, isError: isExtendOfferError } = useWaitForTransactionReceipt({
     hash: extendOfferHash,
     query: { enabled: !!extendOfferHash }
   })
   
-  const { isLoading: isAcceptRepaymentConfirming, isSuccess: isAcceptRepaymentSuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isAcceptRepaymentConfirming, isSuccess: isAcceptRepaymentSuccess, isError: isAcceptRepaymentError } = useWaitForTransactionReceipt({
     hash: acceptRepaymentHash,
     query: { enabled: !!acceptRepaymentHash }
   })
   
-  const { isLoading: isMarkAsDefaultedConfirming, isSuccess: isMarkAsDefaultedSuccess } = useWaitForTransactionReceipt({
+  const { isLoading: isMarkAsDefaultedConfirming, isSuccess: isMarkAsDefaultedSuccess, isError: isMarkAsDefaultedError } = useWaitForTransactionReceipt({
     hash: markAsDefaultedHash,
     query: { enabled: !!markAsDefaultedHash }
   })
@@ -110,6 +116,28 @@ export default function LenderPage() {
     }
   }, [CONTRACTS.BTC_COLLATERAL_LOAN, account.status]) // Removed totalLoans from dependency array
 
+  // Fetch sync status
+  const fetchSyncStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:3002/api/sync/status')
+      const data = await response.json()
+      if (data.success) {
+        setSyncStatus(data)
+      }
+    } catch (error) {
+      console.error('Error fetching sync status:', error)
+    }
+  }
+
+  // Fetch sync status on component mount
+  useEffect(() => {
+    fetchSyncStatus()
+    // Refresh sync status every 30 seconds
+    const interval = setInterval(fetchSyncStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+
   // Update BTC pubkey form with current value from contract when available
   useEffect(() => {
     if (lenderBtcPubkey && lenderBtcPubkey !== '') {
@@ -121,8 +149,8 @@ export default function LenderPage() {
 
   // Form state
   const [newBtcPubkey, setNewBtcPubkey] = useState(BTC_PUBKEY_PLACEHOLDER)
-  const [selectedLoanId, setSelectedLoanId] = useState('0')
-  const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
+  const [selectedLoanId, setSelectedLoanId] = useState('1')
+  const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
   const [preimageLender, setPreimageLender] = useState<`0x${string}`>('0x38f9fa6b463f6e37f2cf7286f1f3bbf2e1fe33296f95629d9c343511f9bd35d5')
   const [newLoanDuration, setNewLoanDuration] = useState(CONTRACT_CONFIG.LOAN_DURATION.toString())
@@ -161,8 +189,8 @@ export default function LenderPage() {
       console.log('Transaction Details:', {
         function: 'extendLoanOffer',
         loanId: selectedLoanId,
-        bondAmount: loanDetails && loanDetails.amount ? formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)) + ' ETH' : '0.01 ETH (fallback)',
-        amountToSend: loanDetails && loanDetails.amount ? formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))) + ' ETH' : '0.01 ETH (fallback)',
+        bondAmount: loanDetails && loanDetails.amount ? formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)) + ' rBTC' : '0.01 rBTC (fallback)',
+        amountToSend: loanDetails && loanDetails.amount ? formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))) + ' rBTC' : '0.01 rBTC (fallback)',
         hash: extendOfferHash
       })
     }
@@ -224,6 +252,18 @@ export default function LenderPage() {
   // State for account transaction nonce
   const [accountNonce, setAccountNonce] = useState<number | null>(null)
 
+  // Sync status state
+  const [syncStatus, setSyncStatus] = useState<{
+    lastSyncTime: string | null
+    lastSyncTimeFormatted: string
+    isMonitoring: boolean
+  } | null>(null)
+
+  // Borrower signature state
+  const [borrowerSignature, setBorrowerSignature] = useState<any>(null)
+  const [checkingSignature, setCheckingSignature] = useState(false)
+  const [signatureChecked, setSignatureChecked] = useState(false)
+
   // Function to check and sync nonce before sending transaction
   const checkAndSyncNonce = async () => {
     if (!account.addresses?.[0]) return false
@@ -257,6 +297,98 @@ export default function LenderPage() {
     }
     return null
   }
+
+  // Success and error message handling for lender transactions
+  useEffect(() => {
+    if (isUpdatePubkeySuccess && updatePubkeyHash) {
+      console.log('✅ BTC Pubkey updated successfully!', updatePubkeyHash)
+      alert(`✅ BTC Public Key Updated!\n\nYour Bitcoin public key has been successfully updated on the contract.\n\nTransaction Hash: ${updatePubkeyHash}`)
+      refetchPubkey()
+    }
+  }, [isUpdatePubkeySuccess, updatePubkeyHash, refetchPubkey])
+
+  useEffect(() => {
+    if (isUpdateParamsSuccess && updateParamsHash) {
+      console.log('✅ Parameters updated successfully!', updateParamsHash)
+      alert(`✅ Contract Parameters Updated!\n\nAll contract parameters have been successfully updated.\n\nTransaction Hash: ${updateParamsHash}`)
+      refetchLoans()
+    }
+  }, [isUpdateParamsSuccess, updateParamsHash, refetchLoans])
+
+  useEffect(() => {
+    if (isAssociateSuccess && associateHash) {
+      console.log('✅ Preimage hash associated successfully!', associateHash)
+      alert(`✅ Preimage Hash Associated!\n\nThe lender's preimage hash has been associated with the loan request.\n\nTransaction Hash: ${associateHash}`)
+      refetchLoanDetails()
+    }
+  }, [isAssociateSuccess, associateHash, refetchLoanDetails])
+
+  useEffect(() => {
+    if (isExtendOfferSuccess && extendOfferHash) {
+      console.log('✅ Loan offer extended successfully!', extendOfferHash)
+      alert(`✅ Loan Offer Extended!\n\nThe loan offer has been successfully extended with new preimages.\n\nTransaction Hash: ${extendOfferHash}`)
+      refetchLoans()
+    }
+  }, [isExtendOfferSuccess, extendOfferHash, refetchLoans])
+
+  useEffect(() => {
+    if (isAcceptRepaymentSuccess && acceptRepaymentHash) {
+      console.log('✅ Repayment accepted successfully!', acceptRepaymentHash)
+      alert(`✅ Repayment Accepted!\n\nThe loan repayment has been successfully accepted and the loan is now completed.\n\nTransaction Hash: ${acceptRepaymentHash}`)
+      refetchLoans()
+    }
+  }, [isAcceptRepaymentSuccess, acceptRepaymentHash, refetchLoans])
+
+  useEffect(() => {
+    if (isMarkAsDefaultedSuccess && markAsDefaultedHash) {
+      console.log('✅ Loan marked as defaulted successfully!', markAsDefaultedHash)
+      alert(`✅ Loan Marked as Defaulted!\n\nThe loan has been successfully marked as defaulted.\n\nTransaction Hash: ${markAsDefaultedHash}`)
+      refetchLoans()
+    }
+  }, [isMarkAsDefaultedSuccess, markAsDefaultedHash, refetchLoans])
+
+  // Error message handling for lender transactions
+  useEffect(() => {
+    if (isUpdatePubkeyError) {
+      console.error('❌ BTC Pubkey update failed:', isUpdatePubkeyError)
+      alert('❌ BTC Public Key Update Failed\n\nFailed to update your Bitcoin public key. Please try again.')
+    }
+  }, [isUpdatePubkeyError])
+
+  useEffect(() => {
+    if (isUpdateParamsError) {
+      console.error('❌ Parameters update failed:', isUpdateParamsError)
+      alert('❌ Parameters Update Failed\n\nFailed to update contract parameters. Please try again.')
+    }
+  }, [isUpdateParamsError])
+
+  useEffect(() => {
+    if (isAssociateError) {
+      console.error('❌ Preimage hash association failed:', isAssociateError)
+      alert('❌ Preimage Hash Association Failed\n\nFailed to associate preimage hash with loan request. Please try again.')
+    }
+  }, [isAssociateError])
+
+  useEffect(() => {
+    if (isExtendOfferError) {
+      console.error('❌ Loan offer extension failed:', isExtendOfferError)
+      alert('❌ Loan Offer Extension Failed\n\nFailed to extend the loan offer. Please try again.')
+    }
+  }, [isExtendOfferError])
+
+  useEffect(() => {
+    if (isAcceptRepaymentError) {
+      console.error('❌ Repayment acceptance failed:', isAcceptRepaymentError)
+      alert('❌ Repayment Acceptance Failed\n\nFailed to accept the loan repayment. Please try again.')
+    }
+  }, [isAcceptRepaymentError])
+
+  useEffect(() => {
+    if (isMarkAsDefaultedError) {
+      console.error('❌ Mark as defaulted failed:', isMarkAsDefaultedError)
+      alert('❌ Mark as Defaulted Failed\n\nFailed to mark the loan as defaulted. Please try again.')
+    }
+  }, [isMarkAsDefaultedError])
 
   // Handlers
   const handleUpdateBtcPubkey = () => {
@@ -295,6 +427,28 @@ export default function LenderPage() {
         BigInt(newTimelockBtcEscrow),
         BigInt(newTimelockRepaymentAccept),
         BigInt(newTimelockBtcCollateral),
+      ],
+    })
+  }
+
+  const handleAssociatePreimageHash = () => {
+    if (!validateWalletAndContracts()) {
+      return
+    }
+
+    if (!associatePreimageHash || !selectedLoanId || selectedLoanId === '0') return
+
+    console.log('🔐 Initiating associatePreimageHash transaction - waiting for wallet signature...')
+    console.log('📋 Selected Loan ID:', selectedLoanId)
+    console.log('🔑 Preimage Hash Lender:', preimageHashLender)
+
+    associatePreimageHash({
+      address: CONTRACTS.BTC_COLLATERAL_LOAN,
+      abi: BTC_COLLATERAL_LOAN_ABI,
+      functionName: 'associateLenderPreimageHash',
+      args: [
+        BigInt(selectedLoanId),
+        preimageHashLender,
       ],
     })
   }
@@ -341,7 +495,7 @@ export default function LenderPage() {
       console.log('⚠️ Extend Loan Offer - Using Fallback Amount:', {
         loanId: selectedLoanId,
         amountToSend: totalAmountToSend.toString(),
-        amountToSendEth: '0.01 ETH (fallback)',
+        amountToSendEth: '0.01 rBTC (fallback)',
         preimageHashBorrower,
         preimageHashLender,
         contractAddress: CONTRACTS.BTC_COLLATERAL_LOAN
@@ -404,6 +558,39 @@ export default function LenderPage() {
       functionName: 'markAsDefaulted',
       args: [BigInt(selectedLoanId)],
     })
+  }
+
+  const handleCheckBorrowerSignature = async () => {
+    if (!selectedLoanId || selectedLoanId === '0') {
+      alert('Please select a loan first')
+      return
+    }
+
+    setCheckingSignature(true)
+    setSignatureChecked(false)
+    setBorrowerSignature(null)
+
+    try {
+      const response = await fetch(`http://localhost:3002/api/bitcoin/signatures/loan/${selectedLoanId}/borrower`)
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setBorrowerSignature(result.data)
+        alert('✅ Borrower signature found!')
+      } else if (result.success && !result.data) {
+        setBorrowerSignature(null)
+        alert('⏳ No borrower signature found yet')
+      } else {
+        setBorrowerSignature(null)
+        alert('❌ Error: ' + (result.error || 'Unknown error'))
+      }
+    } catch (error) {
+      console.error('Error checking borrower signature:', error)
+      alert('Error checking borrower signature: ' + (error as Error).message)
+    } finally {
+      setCheckingSignature(false)
+      setSignatureChecked(true)
+    }
   }
 
   return (
@@ -484,6 +671,55 @@ export default function LenderPage() {
           {status && <div className="mt-2 text-sm text-gray-600">{status}</div>}
           {error && <div className="mt-2 text-sm text-red-600">{error.message}</div>}
         </div>
+
+        {/* Sync Status */}
+        {syncStatus && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">🔄 Data Sync Status</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="font-medium text-blue-800">Last Sync Time</div>
+                <div className="text-blue-600">
+                  {syncStatus.lastSyncTime ? (
+                    <span className="text-blue-700">{syncStatus.lastSyncTimeFormatted}</span>
+                  ) : (
+                    <span className="text-yellow-600">Never synced</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="font-medium text-green-800">Event Monitoring</div>
+                <div className="text-green-600">
+                  {syncStatus.isMonitoring ? (
+                    <span className="text-green-700">✅ Active</span>
+                  ) : (
+                    <span className="text-red-600">❌ Inactive</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="text-sm text-gray-700">
+                <div className="font-medium mb-2">ℹ️ About Data Sync</div>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>• The system automatically syncs loan data from the blockchain</div>
+                  <div>• Sync is triggered when new loan events are detected</div>
+                  <div>• Last sync time shows when the database was last updated</div>
+                  <div>• Event monitoring ensures real-time data accuracy</div>
+                </div>
+                <button
+                  onClick={fetchSyncStatus}
+                  className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                >
+                  🔄 Refresh Status
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Contract Status */}
         {account.status === 'connected' && (
@@ -576,7 +812,7 @@ export default function LenderPage() {
                   value={newBtcPubkey}
                   onChange={(e) => setNewBtcPubkey(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter 64-character BTC public key..."
+                  placeholder="370b519d519d4190b0584cd7836912ff78c46e2e2d18016e445f8e821b30b99d"
                   maxLength={64}
                 />
                 <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters (32 bytes as hex)</p>
@@ -733,7 +969,7 @@ export default function LenderPage() {
                       }
                     }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                    placeholder="0x... (actual preimage, not hash)"
+                    placeholder="0x370b519d519d4190b0584cd7836912ff78c46e2e2d18016e445f8e821b30b99d"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     <strong>Important:</strong> This is the actual preimage (secret), not the hash. Required to accept loan repayments.
@@ -754,9 +990,9 @@ export default function LenderPage() {
                           <div className="space-y-1 text-xs text-blue-600">
                             <div>Borrower Address: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerAddr || 'N/A'}</code></div>
                             <div>Borrower BTC Pubkey: <code className="bg-blue-100 px-1 rounded">{loanDetails.borrowerBtcPubkey || 'N/A'}</code></div>
-                            <div>Loan Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.amount ? formatEther(BigInt(loanDetails.amount)) : 'N/A'} ETH</code></div>
+                            <div>Loan Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.amount ? formatEther(BigInt(loanDetails.amount)) : 'N/A'} rBTC</code></div>
                             <div>Collateral Amount: <code className="bg-blue-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
-                            <div>Bond Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.bondAmount ? formatEther(BigInt(loanDetails.bondAmount)) : 'N/A'} ETH</code></div>
+                            <div>Bond Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.bondAmount ? formatEther(BigInt(loanDetails.bondAmount)) : 'N/A'} rBTC</code></div>
                             <div>Status: <code className="bg-blue-100 px-1 rounded">{loanDetails.status || 'N/A'}</code></div>
                           </div>
                         </div>
@@ -784,15 +1020,15 @@ export default function LenderPage() {
                           <div className="font-medium text-green-800 mb-2">💰 Amount Calculations</div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-green-700">
                             <div>
-                              <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} ETH</code></div>
+                              <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} rBTC</code></div>
                               <div className="text-gray-500">({loanDetails.amount} wei)</div>
                             </div>
                             <div>
-                              <div>Bond Amount (10%): <code className="bg-green-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code></div>
+                              <div>Bond Amount (10%): <code className="bg-green-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} rBTC</code></div>
                               <div className="text-gray-500">({((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)).toString()} wei)</div>
                             </div>
                             <div>
-                              <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code></div>
+                              <div>Total to Send: <code className="bg-green-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount)) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} rBTC</code></div>
                               <div className="text-gray-500">({(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))).toString()} wei)</div>
                             </div>
                           </div>
@@ -806,7 +1042,7 @@ export default function LenderPage() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-purple-700">
                             <div>
                               <div>Interest Rate: <code className="bg-purple-100 px-1 rounded">{loanParameters.int_rate ? Number(loanParameters.int_rate) : 'N/A'}</code></div>
-                              <div>Processing Fee: <code className="bg-purple-100 px-1 rounded">{loanParameters.proc_fee ? formatEther(BigInt(loanParameters.proc_fee)) : 'N/A'} ETH</code></div>
+                              <div>Processing Fee: <code className="bg-purple-100 px-1 rounded">{loanParameters.proc_fee ? formatEther(BigInt(loanParameters.proc_fee)) : 'N/A'} rBTC</code></div>
                             </div>
                             <div>
                               <div>Duration: <code className="bg-purple-100 px-1 rounded">{loanParameters.duration ? Number(loanParameters.duration) : 'N/A'} blocks</code></div>
@@ -866,14 +1102,91 @@ export default function LenderPage() {
                   )}
                   {loanDetails && loanDetails.amount && (
                     <>
-                      <div>Loan Amount: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} ETH</code></div>
-                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} ETH</code> (10%)</div>
-                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)))} ETH</code> (loan + bond)</div>
+                      <div>Loan Amount: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} rBTC</code></div>
+                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} rBTC</code> (10%)</div>
+                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)))} rBTC</code> (loan + bond)</div>
                     </>
                   )}
                   <div>Contract Address: <code className="bg-blue-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
                 </div>
               </div>
+
+              {/* Associate Preimage Hash Section */}
+              {loanDetails && loanDetails.status === 0 && ( // LoanStatus.Requested = 0
+                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <h4 className="font-medium text-orange-800 mb-3">🔑 Associate Lender Preimage Hash</h4>
+                  <p className="text-sm text-orange-700 mb-4">
+                    Before extending a loan offer, associate your preimage hash with this loan request. 
+                    The borrower will need this to generate their signature.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={preimageHashLender}
+                      onChange={(e) => setPreimageHashLender(e.target.value as `0x${string}`)}
+                      className="flex-1 px-3 py-2 border border-orange-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      placeholder="0xe798ad509095159029f96edc70103293a66c438c6a0e6a8847186bf8c7eb032d"
+                    />
+                    <button
+                      onClick={handleAssociatePreimageHash}
+                      disabled={associateLoading || !preimageHashLender || preimageHashLender === '0x0000000000000000000000000000000000000000000000000000000000000000'}
+                      className="bg-orange-500 hover:bg-orange-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+                    >
+                      {associateLoading ? 'Associating...' : 'Associate Preimage Hash'}
+                    </button>
+                  </div>
+                  {loanDetails.preimageHashLender && loanDetails.preimageHashLender !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                    <div className="mt-2 p-2 bg-green-100 border border-green-300 rounded text-sm text-green-800">
+                      ✅ Preimage hash already associated: <code className="font-mono text-xs">{loanDetails.preimageHashLender}</code>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Borrower Signature Section */}
+              {loanDetails && loanDetails.status === 0 && loanDetails.preimageHashLender && loanDetails.preimageHashLender !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="font-medium text-green-800 mb-3">✍️ Borrower Signature Status</h4>
+                  <p className="text-sm text-green-700 mb-4">
+                    Check if the borrower has provided their signature for the collateral transaction.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCheckBorrowerSignature}
+                      disabled={checkingSignature}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-medium rounded-lg transition-colors"
+                    >
+                      {checkingSignature ? 'Checking...' : 'Check Borrower Signature'}
+                    </button>
+                  </div>
+                  
+                  {/* Display signature if found */}
+                  {borrowerSignature && (
+                    <div className="mt-4 p-3 bg-white border border-green-200 rounded-lg">
+                      <h5 className="font-medium text-green-800 mb-2">✅ Borrower Signature Found</h5>
+                      <div className="text-sm text-green-700 space-y-1">
+                        <div><strong>Transaction ID:</strong> <code className="bg-green-100 px-1 rounded text-xs">{borrowerSignature.txid}</code></div>
+                        <div><strong>Output Index:</strong> {borrowerSignature.vout}</div>
+                        <div><strong>Signature:</strong> <code className="bg-green-100 px-1 rounded text-xs">{borrowerSignature.sig_borrower?.substring(0, 20)}...</code></div>
+                        <div><strong>Input Amount:</strong> {borrowerSignature.input_amount} BTC</div>
+                      </div>
+                      <div className="mt-3 text-sm text-green-600">
+                        <strong>Next Step:</strong> You can now extend a loan offer. The borrower must accept the loan offer and reveal their preimage before you can complete the witness.
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Display message if no signature found */}
+                  {!borrowerSignature && signatureChecked && (
+                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <h5 className="font-medium text-yellow-800 mb-2">⏳ No Signature Yet</h5>
+                      <p className="text-sm text-yellow-700">
+                        The borrower hasn't provided their signature yet. They need to generate and upload their signature using the Python API.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button

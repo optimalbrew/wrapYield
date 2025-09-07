@@ -110,12 +110,89 @@ export default function BorrowerPage() {
   // State for account transaction nonce
   const [accountNonce, setAccountNonce] = useState<number | null>(null)
 
+  // Sync status state
+  const [syncStatus, setSyncStatus] = useState<{
+    lastSyncTime: string | null
+    lastSyncTimeFormatted: string
+    isMonitoring: boolean
+  } | null>(null)
+
   // Monitor transaction hashes
   useEffect(() => {
     if (requestLoanHash) {
       console.log('📝 Request loan transaction hash generated:', requestLoanHash)
     }
   }, [requestLoanHash])
+
+  // Success and error message handling
+  useEffect(() => {
+    if (requestLoanSuccess && requestLoanReceipt) {
+      console.log('🎉 Loan request successful!', requestLoanReceipt)
+      // You could add a toast notification here if you have a toast library
+      alert(`🎉 Loan Request Successful!\n\nYour loan request has been submitted and is pending lender approval.\n\nTransaction Hash: ${requestLoanReceipt.transactionHash}\nBlock Number: ${requestLoanReceipt.blockNumber}`)
+      
+      // Clear form and refresh data
+      setLoanAmount('')
+      setBtcAddress('')
+      setBorrowerBtcPubkey('')
+      setPreimageHashBorrower('')
+      setTxidP2tr0('')
+      setVoutP2tr0('')
+      refetchLoans()
+    }
+  }, [requestLoanSuccess, requestLoanReceipt, refetchLoans])
+
+  useEffect(() => {
+    if (requestLoanError) {
+      console.error('❌ Loan request failed:', requestLoanError)
+      alert('❌ Loan Request Failed\n\nThe transaction was rejected or failed. Please check your inputs and try again.')
+    }
+  }, [requestLoanError])
+
+  useEffect(() => {
+    if (acceptLoanSuccess && acceptLoanReceipt) {
+      console.log('✅ Loan accepted successfully!', acceptLoanReceipt)
+      alert(`✅ Loan Accepted!\n\nYou have successfully accepted the loan offer. The funds will be available shortly.\n\nTransaction Hash: ${acceptLoanReceipt.transactionHash}`)
+      refetchLoans()
+    }
+  }, [acceptLoanSuccess, acceptLoanReceipt, refetchLoans])
+
+  useEffect(() => {
+    if (acceptLoanError) {
+      console.error('❌ Loan acceptance failed:', acceptLoanError)
+      alert('❌ Loan Acceptance Failed\n\nFailed to accept the loan offer. Please try again.')
+    }
+  }, [acceptLoanError])
+
+  useEffect(() => {
+    if (repaymentSuccess && repaymentReceipt) {
+      console.log('💰 Repayment successful!', repaymentReceipt)
+      alert(`💰 Repayment Submitted!\n\nYour repayment has been submitted and is being processed.\n\nTransaction Hash: ${repaymentReceipt.transactionHash}`)
+      refetchLoans()
+    }
+  }, [repaymentSuccess, repaymentReceipt, refetchLoans])
+
+  useEffect(() => {
+    if (repaymentError) {
+      console.error('❌ Repayment failed:', repaymentError)
+      alert('❌ Repayment Failed\n\nFailed to submit repayment. Please try again.')
+    }
+  }, [repaymentError])
+
+  useEffect(() => {
+    if (withdrawSuccess && withdrawReceipt) {
+      console.log('💸 Withdrawal successful!', withdrawReceipt)
+      alert(`💸 Withdrawal Successful!\n\nYour repayment attempt has been withdrawn.\n\nTransaction Hash: ${withdrawReceipt.transactionHash}`)
+      refetchLoans()
+    }
+  }, [withdrawSuccess, withdrawReceipt, refetchLoans])
+
+  useEffect(() => {
+    if (withdrawError) {
+      console.error('❌ Withdrawal failed:', withdrawError)
+      alert('❌ Withdrawal Failed\n\nFailed to withdraw repayment attempt. Please try again.')
+    }
+  }, [withdrawError])
 
   // Function to check and sync nonce before sending transaction
   const checkAndSyncNonce = async () => {
@@ -177,25 +254,61 @@ export default function BorrowerPage() {
     }
   }, [CONTRACTS.BTC_COLLATERAL_LOAN, account.status])
 
+  // Fetch sync status
+  const fetchSyncStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:3002/api/sync/status')
+      const data = await response.json()
+      if (data.success) {
+        setSyncStatus(data)
+      }
+    } catch (error) {
+      console.error('Error fetching sync status:', error)
+    }
+  }
+
+  // Fetch sync status on component mount
+  useEffect(() => {
+    fetchSyncStatus()
+    // Refresh sync status every 30 seconds
+    const interval = setInterval(fetchSyncStatus, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+
   // Form state
-  const [loanAmount, setLoanAmount] = useState('0.1')
+  const [loanAmount, setLoanAmount] = useState('')
   const [selectedLoanId, setSelectedLoanId] = useState('0')
-  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('1234567890432156789012345678901234567890123456789012345678901234')
-  const [btcAddress, setBtcAddress] = useState('bcrt1pxy2kgdygjrsqtzq2n0yrf1393p83kkfjhx0wlhd4ks9a2l7qj0m9s8n5v')
-  const [preimageHashBorrower, setPreimageHashBorrower] = useState<`0x${string}`>('0x4534f8f303eb5fc7175946b1c46772fa31bca38f724c1a0be97b9b0289431ee1')
+  
+  // Auto-set loan ID when totalLoans changes
+  useEffect(() => {
+    if (totalLoans !== undefined && Number(totalLoans) > 0) {
+      // Use the latest loan ID (totalLoans, since loan IDs are 1-indexed in the contract)
+      const latestLoanId = Number(totalLoans).toString()
+      setSelectedLoanId(latestLoanId)
+    }
+  }, [totalLoans])
+  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8')
+  const [btcAddress, setBtcAddress] = useState('bcrt1p8zquc6fyga5uldc2j3k2wscpnw44xgjuf8tpqt3ekt85vw2gqtdqlkaujg')
+  const [preimageHashBorrower, setPreimageHashBorrower] = useState<string>('0x114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
-  const [preimageBorrower, setPreimageBorrower] = useState<`0x${string}`>('0x05e5cdc502cc641787db0383a01d4b6baec69b62b6dbf9d9d9600872bbbed741')
-  const [txidP2tr0, setTxidP2tr0] = useState<`0x${string}`>('0xef71afe3b2f77a78c44843db2f0ab151b8fb0c298403e3634869ab65b8f677a4')
+  const [preimageBorrower, setPreimageBorrower] = useState<`0x${string}`>('0x0e0ed04e19fa04ec6b29e6ccfd6f7384a22e1a92b81563064d8c74f354d41f05')
+  const [txidP2tr0, setTxidP2tr0] = useState<string>('0xef71afe3b2f77a78c44843db2f0ab151b8fb0c298403e3634869ab65b8f677a4')
   const [voutP2tr0, setVoutP2tr0] = useState('0')
 
   // Prepare Collateral state
   const [prepareCollateralData, setPrepareCollateralData] = useState({
-    loanAmount: '',
-    btcPubkey: '',
-    preimageHash: ''
+    loanAmount: '0.01',
+    btcPubkey: '64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8',
+    preimageHash: '0x114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927'
   })
   const [collateralResult, setCollateralResult] = useState<any>(null)
   const [isPreparingCollateral, setIsPreparingCollateral] = useState(false)
+
+  // Signature upload/paste state
+  const [signatureFile, setSignatureFile] = useState<File | null>(null)
+  const [signatureJsonContent, setSignatureJsonContent] = useState('')
+  const [processedSignature, setProcessedSignature] = useState<any>(null)
 
   // Validation functions
   const isValidHexString = (value: string): value is `0x${string}` => {
@@ -207,6 +320,150 @@ export default function BorrowerPage() {
       setter(value)
     }
   }
+
+  // Comprehensive validation functions
+  const validateBtcPubkey = (pubkey: string): { isValid: boolean; error: string } => {
+    if (!pubkey) {
+      return { isValid: false, error: 'BTC public key is required' }
+    }
+    if (pubkey.length !== 64) {
+      return { isValid: false, error: 'BTC public key must be exactly 64 characters' }
+    }
+    if (!/^[0-9a-fA-F]+$/.test(pubkey)) {
+      return { isValid: false, error: 'BTC public key must contain only hexadecimal characters' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  const validatePreimageHash = (hash: string): { isValid: boolean; error: string } => {
+    if (!hash) {
+      return { isValid: false, error: 'Preimage hash is required' }
+    }
+    if (!hash.startsWith('0x')) {
+      return { isValid: false, error: 'Preimage hash must start with 0x' }
+    }
+    if (hash.length !== 66) {
+      return { isValid: false, error: 'Preimage hash must be exactly 66 characters (0x + 64 hex chars)' }
+    }
+    if (!isValidHexString(hash)) {
+      return { isValid: false, error: 'Preimage hash must contain only valid hexadecimal characters' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  const validateLoanAmount = (amount: string): { isValid: boolean; error: string } => {
+    if (!amount) {
+      return { isValid: false, error: 'Loan amount is required' }
+    }
+    const numAmount = parseFloat(amount)
+    if (isNaN(numAmount)) {
+      return { isValid: false, error: 'Loan amount must be a valid number' }
+    }
+    if (numAmount <= 0) {
+      return { isValid: false, error: 'Loan amount must be greater than 0' }
+    }
+    if (numAmount < 0.005) {
+      return { isValid: false, error: 'Minimum loan amount is 0.005 rBTC' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  const validateBtcAddress = (address: string): { isValid: boolean; error: string } => {
+    if (!address) {
+      return { isValid: false, error: 'BTC address is required' }
+    }
+    // P2TR (Taproot) address validation - only bech32m format
+    // Mainnet: bc1p... (62 characters)
+    // Testnet/Regtest: bcrt1p... (64 characters)
+    const p2trMainnetRegex = /^bc1p[a-z0-9]{58}$/
+    const p2trTestnetRegex = /^bcrt1p[a-z0-9]{58}$/
+    
+    if (!p2trMainnetRegex.test(address) && !p2trTestnetRegex.test(address)) {
+      return { isValid: false, error: 'Invalid P2TR address format. Must be bech32m (bc1p... for mainnet or bcrt1p... for testnet)' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  const validateTxid = (txid: string): { isValid: boolean; error: string } => {
+    if (!txid) {
+      return { isValid: false, error: 'Transaction ID is required' }
+    }
+    if (!txid.startsWith('0x')) {
+      return { isValid: false, error: 'Transaction ID must start with 0x' }
+    }
+    if (txid.length !== 66) {
+      return { isValid: false, error: 'Transaction ID must be exactly 66 characters (0x + 64 hex chars)' }
+    }
+    if (!isValidHexString(txid)) {
+      return { isValid: false, error: 'Transaction ID must contain only valid hexadecimal characters' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  const validateVout = (vout: string): { isValid: boolean; error: string } => {
+    if (!vout) {
+      return { isValid: false, error: 'Output index is required' }
+    }
+    const numVout = parseInt(vout)
+    if (isNaN(numVout)) {
+      return { isValid: false, error: 'Output index must be a valid number' }
+    }
+    if (numVout < 0) {
+      return { isValid: false, error: 'Output index must be 0 or greater' }
+    }
+    return { isValid: true, error: '' }
+  }
+
+  // Form validation state
+  const [formErrors, setFormErrors] = useState<{
+    loanAmount: string
+    btcAddress: string
+    borrowerBtcPubkey: string
+    preimageHashBorrower: string
+    txidP2tr0: string
+    voutP2tr0: string
+  }>({
+    loanAmount: '',
+    btcAddress: '',
+    borrowerBtcPubkey: '',
+    preimageHashBorrower: '',
+    txidP2tr0: '',
+    voutP2tr0: ''
+  })
+
+  // Check if form is valid
+  const isFormValid = () => {
+    const loanAmountValidation = validateLoanAmount(loanAmount)
+    const btcAddressValidation = validateBtcAddress(btcAddress)
+    const btcPubkeyValidation = validateBtcPubkey(borrowerBtcPubkey)
+    const preimageHashValidation = validatePreimageHash(preimageHashBorrower)
+    const txidValidation = validateTxid(txidP2tr0)
+    const voutValidation = validateVout(voutP2tr0)
+
+    return loanAmountValidation.isValid &&
+           btcAddressValidation.isValid &&
+           btcPubkeyValidation.isValid &&
+           preimageHashValidation.isValid &&
+           txidValidation.isValid &&
+           voutValidation.isValid
+  }
+
+  // Update validation errors
+  const updateValidationErrors = () => {
+    setFormErrors({
+      loanAmount: validateLoanAmount(loanAmount).error,
+      btcAddress: validateBtcAddress(btcAddress).error,
+      borrowerBtcPubkey: validateBtcPubkey(borrowerBtcPubkey).error,
+      preimageHashBorrower: validatePreimageHash(preimageHashBorrower).error,
+      txidP2tr0: validateTxid(txidP2tr0).error,
+      voutP2tr0: validateVout(voutP2tr0).error
+    })
+  }
+
+  // Update validation on form changes
+  useEffect(() => {
+    updateValidationErrors()
+  }, [loanAmount, btcAddress, borrowerBtcPubkey, preimageHashBorrower, txidP2tr0, voutP2tr0])
 
   // Prepare Collateral handler
   const handlePrepareCollateral = async () => {
@@ -282,7 +539,7 @@ export default function BorrowerPage() {
       preimageHashBorrower,
       txid_p2tr0: txidP2tr0,
       vout_p2tr0: voutP2tr0,
-      value: BigInt('1000000000000000') // PROCESSING_FEE (0.001 ETH in wei)
+      value: BigInt('1000000000000000') // PROCESSING_FEE (0.001 rBTC in wei)
     })
 
     try {
@@ -295,11 +552,11 @@ export default function BorrowerPage() {
           parseEther(loanAmount), // amount
           btcAddress, // btcAddress
           borrowerBtcPubkey, // btcPubkey
-          preimageHashBorrower, // preimageHashBorrower
-          txidP2tr0, // txid_p2tr0
+          preimageHashBorrower as `0x${string}`, // preimageHashBorrower
+          txidP2tr0 as `0x${string}`, // txid_p2tr0
           parseInt(voutP2tr0), // vout_p2tr0
         ],
-        value: BigInt('1000000000000000'), // PROCESSING_FEE (0.001 ETH in wei)
+        value: BigInt('1000000000000000'), // PROCESSING_FEE (0.001 rBTC in wei)
       })
       console.log('✅ requestLoan transaction sent successfully')
     } catch (error) {
@@ -336,7 +593,7 @@ export default function BorrowerPage() {
     console.log('⛽ Gas Settings:', {
       gas: '500,000',
       gasPrice: '1 gwei (1,000,000,000 wei)',
-      estimatedCost: '0.0005 ETH (500,000 * 1 gwei)'
+      estimatedCost: '0.0005 rBTC (500,000 * 1 gwei)'
     })
     
     acceptLoanOffer({
@@ -389,6 +646,96 @@ export default function BorrowerPage() {
       functionName: 'withdrawRepaymentAttempt',
       args: [BigInt(selectedLoanId)], // loanId
     })
+  }
+
+  // Signature handling functions
+  const handleSignatureFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setSignatureFile(file)
+      // Read file content and set it in the textarea
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = e.target?.result as string
+        setSignatureJsonContent(content)
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  const handleProcessSignature = async () => {
+    console.log('handleProcessSignature called')
+    console.log('signatureFile:', signatureFile)
+    console.log('signatureJsonContent:', signatureJsonContent)
+    
+    try {
+      let signatureData
+      
+      if (signatureFile) {
+        console.log('Processing uploaded file')
+        // Process uploaded file
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+          try {
+            const content = e.target?.result as string
+            signatureData = JSON.parse(content)
+            await saveSignatureToBackend(signatureData)
+          } catch (error) {
+            alert('Error parsing signature file: ' + (error as Error).message)
+          }
+        }
+        reader.readAsText(signatureFile)
+      } else if (signatureJsonContent) {
+        console.log('Processing pasted content')
+        // Process pasted content
+        signatureData = JSON.parse(signatureJsonContent)
+        await saveSignatureToBackend(signatureData)
+      } else {
+        console.log('No content to process')
+        alert('Please upload a file or paste signature content')
+      }
+    } catch (error) {
+      console.error('Error processing signature:', error)
+      alert('Error processing signature: ' + (error as Error).message)
+    }
+  }
+
+  const saveSignatureToBackend = async (signatureData: any) => {
+    try {
+      const response = await fetch('http://localhost:3002/api/bitcoin/signatures/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          loanId: selectedLoanId,
+          signatureData: signatureData,
+          borrowerAddress: account.address,
+          transactionType: 'collateral'
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setProcessedSignature(signatureData)
+        alert('Signature processed and saved successfully!')
+      } else {
+        alert('Error saving signature: ' + result.error)
+      }
+    } catch (error) {
+      console.error('Error saving signature to backend:', error)
+      alert('Error saving signature to backend: ' + (error as Error).message)
+    }
+  }
+
+  const handleClearSignature = () => {
+    setSignatureFile(null)
+    setSignatureJsonContent('')
+    setProcessedSignature(null)
+    // Clear file input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    if (fileInput) fileInput.value = ''
   }
 
   return (
@@ -470,6 +817,55 @@ export default function BorrowerPage() {
           {error && <div className="mt-2 text-sm text-red-600">{error.message}</div>}
         </div>
 
+        {/* Sync Status */}
+        {syncStatus && (
+          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+            <h2 className="text-2xl font-semibold mb-4 text-gray-800">🔄 Data Sync Status</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="font-medium text-blue-800">Last Sync Time</div>
+                <div className="text-blue-600">
+                  {syncStatus.lastSyncTime ? (
+                    <span className="text-blue-700">{syncStatus.lastSyncTimeFormatted}</span>
+                  ) : (
+                    <span className="text-yellow-600">Never synced</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="font-medium text-green-800">Event Monitoring</div>
+                <div className="text-green-600">
+                  {syncStatus.isMonitoring ? (
+                    <span className="text-green-700">✅ Active</span>
+                  ) : (
+                    <span className="text-red-600">❌ Inactive</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="text-sm text-gray-700">
+                <div className="font-medium mb-2">ℹ️ About Data Sync</div>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <div>• The system automatically syncs loan data from the blockchain</div>
+                  <div>• Sync is triggered when new loan events are detected</div>
+                  <div>• Last sync time shows when the database was last updated</div>
+                  <div>• Event monitoring ensures real-time data accuracy</div>
+                </div>
+                <button
+                  onClick={fetchSyncStatus}
+                  className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                >
+                  🔄 Refresh Status
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Contract Status */}
         {account.status === 'connected' && (
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
@@ -521,8 +917,8 @@ export default function BorrowerPage() {
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
               <div className="text-sm text-emerald-800">
                 <div className="font-medium">Total Loans: {totalLoans !== undefined ? Number(totalLoans) : 0}</div>
-                <div className="font-medium mt-1">Processing Fee: 0.001 ETH</div>
-                <div className="font-medium mt-1">Minimum Loan Amount: 0.005 ETH</div>
+                <div className="font-medium mt-1">Processing Fee: 0.001 rBTC</div>
+                <div className="font-medium mt-1">Minimum Loan Amount: 0.005 rBTC</div>
                 <button
                   onClick={() => refetchLoans()}
                   className="mt-2 px-3 py-1 bg-emerald-600 text-white text-xs rounded hover:bg-emerald-700 transition-colors"
@@ -555,45 +951,96 @@ export default function BorrowerPage() {
               </div>
             </div>
 
-            {/* Transaction Status Display */}
+            {/* Enhanced Transaction Status Display */}
             {(requestLoanHash || acceptLoanHash || repaymentHash || withdrawHash) && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <h4 className="text-sm font-medium text-blue-800 mb-2">📊 Transaction Status</h4>
-                <div className="text-xs text-blue-700 space-y-2">
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-800 mb-3">📊 Transaction Status</h4>
+                <div className="space-y-3">
                   {requestLoanHash && (
-                    <div>
-                      <strong>Request Loan:</strong> 
-                      {requestLoanLoading ? ' Pending...' : 
-                       requestLoanSuccess ? ' ✅ Success' : 
-                       requestLoanError ? ' ❌ Failed' : ' Processing...'}
-                      {requestLoanHash && <div className="font-mono text-xs mt-1">Hash: {requestLoanHash}</div>}
+                    <div className={`p-3 rounded-lg border-l-4 ${
+                      requestLoanSuccess ? 'bg-green-50 border-green-400' :
+                      requestLoanError ? 'bg-red-50 border-red-400' :
+                      'bg-blue-50 border-blue-400'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                          {requestLoanLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+                          {requestLoanSuccess && <span className="text-green-600">✅</span>}
+                          {requestLoanError && <span className="text-red-600">❌</span>}
+                          <span className="font-medium text-sm">
+                            {requestLoanLoading ? 'Requesting Loan...' : 
+                             requestLoanSuccess ? 'Loan Request Successful!' : 
+                             requestLoanError ? 'Loan Request Failed' : 'Processing...'}
+                          </span>
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1 font-mono">
+                        Hash: {requestLoanHash}
+                      </div>
                     </div>
                   )}
+                  
                   {acceptLoanHash && (
-                    <div>
-                      <strong>Accept Loan:</strong> 
-                      {acceptLoading ? ' Pending...' : 
-                       acceptLoanSuccess ? ' ✅ Success' : 
-                       acceptLoanError ? ' ❌ Failed' : ' Processing...'}
-                      {acceptLoanHash && <div className="font-mono text-xs mt-1">Hash: {acceptLoanHash}</div>}
+                    <div className={`p-3 rounded-lg border-l-4 ${
+                      acceptLoanSuccess ? 'bg-green-50 border-green-400' :
+                      acceptLoanError ? 'bg-red-50 border-red-400' :
+                      'bg-blue-50 border-blue-400'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                          {acceptLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+                          {acceptLoanSuccess && <span className="text-green-600">✅</span>}
+                          {acceptLoanError && <span className="text-red-600">❌</span>}
+                          <span className="font-medium text-sm">
+                            {acceptLoading ? 'Accepting Loan...' : 
+                             acceptLoanSuccess ? 'Loan Accepted!' : 
+                             acceptLoanError ? 'Loan Acceptance Failed' : 'Processing...'}
+                          </span>
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1 font-mono">
+                        Hash: {acceptLoanHash}
+                      </div>
                     </div>
                   )}
+                  
                   {repaymentHash && (
-                    <div>
-                      <strong>Repayment:</strong> 
-                      {repaymentLoading ? ' Pending...' : 
-                       repaymentSuccess ? ' ✅ Success' : 
-                       repaymentError ? ' ❌ Failed' : ' Processing...'}
-                      {repaymentHash && <div className="font-mono text-xs mt-1">Hash: {repaymentHash}</div>}
+                    <div className={`p-3 rounded-lg border-l-4 ${
+                      repaymentSuccess ? 'bg-green-50 border-green-400' :
+                      repaymentError ? 'bg-red-50 border-red-400' :
+                      'bg-blue-50 border-blue-400'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                          {repaymentLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+                          {repaymentSuccess && <span className="text-green-600">✅</span>}
+                          {repaymentError && <span className="text-red-600">❌</span>}
+                          <span className="font-medium text-sm">
+                            {repaymentLoading ? 'Submitting Repayment...' : 
+                             repaymentSuccess ? 'Repayment Submitted!' : 
+                             repaymentError ? 'Repayment Failed' : 'Processing...'}
+                          </span>
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1 font-mono">
+                        Hash: {repaymentHash}
+                      </div>
                     </div>
                   )}
+                  
                   {withdrawHash && (
-                    <div>
-                      <strong>Withdraw:</strong> 
-                      {withdrawLoading ? ' Pending...' : 
-                       withdrawSuccess ? ' ✅ Success' : 
-                       withdrawError ? ' ❌ Failed' : ' Processing...'}
-                      {withdrawHash && <div className="font-mono text-xs mt-1">Hash: {withdrawHash}</div>}
+                    <div className={`p-3 rounded-lg border-l-4 ${
+                      withdrawSuccess ? 'bg-green-50 border-green-400' :
+                      withdrawError ? 'bg-red-50 border-red-400' :
+                      'bg-blue-50 border-blue-400'
+                    }`}>
+                      <div className="flex items-center space-x-2">
+                          {withdrawLoading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>}
+                          {withdrawSuccess && <span className="text-green-600">✅</span>}
+                          {withdrawError && <span className="text-red-600">❌</span>}
+                          <span className="font-medium text-sm">
+                            {withdrawLoading ? 'Withdrawing...' : 
+                             withdrawSuccess ? 'Withdrawal Successful!' : 
+                             withdrawError ? 'Withdrawal Failed' : 'Processing...'}
+                          </span>
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1 font-mono">
+                        Hash: {withdrawHash}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -664,9 +1111,9 @@ export default function BorrowerPage() {
                         <div className="space-y-1 text-xs text-green-600">
                           <div>Borrower: <code className="bg-green-100 px-1 rounded">{borrowerLoan.borrowerAddr || 'N/A'}</code></div>
                           <div>BTC Pubkey: <code className="bg-green-100 px-1 rounded">{borrowerLoan.borrowerBtcPubkey || 'N/A'}</code></div>
-                          <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.amount ? formatEther(BigInt(borrowerLoan.amount)) : 'N/A'} ETH</code></div>
+                          <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.amount ? formatEther(BigInt(borrowerLoan.amount)) : 'N/A'} rBTC</code></div>
                           <div>Collateral: <code className="bg-green-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
-                          <div>Bond Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.bondAmount ? formatEther(BigInt(borrowerLoan.bondAmount)) : 'N/A'} ETH</code></div>
+                          <div>Bond Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.bondAmount ? formatEther(BigInt(borrowerLoan.bondAmount)) : 'N/A'} rBTC</code></div>
                           <div>Status: <code className="bg-green-100 px-1 rounded">{borrowerLoan.status || 'N/A'}</code></div>
                         </div>
                       </div>
@@ -698,7 +1145,7 @@ export default function BorrowerPage() {
                             <div className="font-medium text-blue-700 mb-2">Fees & Rates</div>
                             <div className="space-y-1 text-xs text-blue-600">
                               <div>Interest Rate: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.int_rate ? Number(borrowerLoanParameters.int_rate) : 'N/A'}</code></div>
-                              <div>Processing Fee: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.proc_fee ? formatEther(BigInt(borrowerLoanParameters.proc_fee)) : 'N/A'} ETH</code></div>
+                              <div>Processing Fee: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.proc_fee ? formatEther(BigInt(borrowerLoanParameters.proc_fee)) : 'N/A'} rBTC</code></div>
                             </div>
                           </div>
                           <div>
@@ -708,6 +1155,111 @@ export default function BorrowerPage() {
                               <div>Borrower Timelock: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.tl_borrower ? Number(borrowerLoanParameters.tl_borrower) : 'N/A'} blocks</code></div>
                               <div>Lender Timelock: <code className="bg-blue-100 px-1 rounded">{borrowerLoanParameters.tl_lender ? Number(borrowerLoanParameters.tl_lender) : 'N/A'} blocks</code></div>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Generate Borrower Signature Section */}
+                    {borrowerLoan && borrowerLoan.status === 0 && borrowerLoan.preimageHashLender && borrowerLoan.preimageHashLender !== '0x0000000000000000000000000000000000000000000000000000000000000000' && (
+                      <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                        <h4 className="font-medium text-purple-800 mb-3">✍️ Generate Borrower Signature</h4>
+                        <p className="text-sm text-purple-700 mb-4">
+                          The lender has provided their preimage hash. You can now generate your signature for the collateral transaction.
+                        </p>
+                        <div className="space-y-3">
+                          <div className="text-sm">
+                            <span className="font-medium text-purple-800">Lender's Preimage Hash:</span>
+                            <code className="ml-2 bg-purple-100 px-2 py-1 rounded text-xs font-mono">
+                              {borrowerLoan.preimageHashLender}
+                            </code>
+                          </div>
+                          <div className="text-sm">
+                            <span className="font-medium text-purple-800">Your Preimage Hash:</span>
+                            <code className="ml-2 bg-purple-100 px-2 py-1 rounded text-xs font-mono">
+                              {borrowerLoan.preimageHashBorrower}
+                            </code>
+                          </div>
+                          
+                          {/* Signature Upload/Paste Section */}
+                          <div className="mt-4 p-4 bg-white border border-purple-200 rounded-lg">
+                            <h5 className="font-medium text-purple-800 mb-3">📁 Upload or Paste Signature File</h5>
+                            <p className="text-sm text-purple-600 mb-4">
+                              After generating your signature using the Python API, upload the JSON file or paste its contents below:
+                            </p>
+                            
+                            {/* Sample file download */}
+                            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm text-blue-700 mb-2">
+                                <strong>💡 Test with sample file:</strong> Download a sample signature file to test the functionality:
+                              </p>
+                              <a
+                                href="/sample-borrower-signature.json"
+                                download="sample-borrower-signature.json"
+                                className="inline-flex items-center px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors"
+                              >
+                                📥 Download Sample Signature
+                              </a>
+                            </div>
+                            
+                            {/* File Upload */}
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-purple-800 mb-2">
+                                Upload Signature File
+                              </label>
+                              <input
+                                type="file"
+                                accept=".json"
+                                onChange={handleSignatureFileUpload}
+                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                              />
+                            </div>
+                            
+                            {/* Text Area for Pasting */}
+                            <div className="mb-4">
+                              <label className="block text-sm font-medium text-purple-800 mb-2">
+                                Or Paste Signature JSON Content
+                              </label>
+                              <textarea
+                                value={signatureJsonContent}
+                                onChange={(e) => setSignatureJsonContent(e.target.value)}
+                                placeholder="Paste the signature JSON content here..."
+                                className="w-full h-32 px-3 py-2 border border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm font-mono"
+                              />
+                            </div>
+                            
+                            {/* Action Buttons */}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleProcessSignature}
+                                disabled={!signatureJsonContent && !signatureFile}
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                Process Signature
+                              </button>
+                              <button
+                                onClick={handleClearSignature}
+                                className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            
+                            {/* Display Processed Signature Info */}
+                            {processedSignature && (
+                              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <h6 className="font-medium text-green-800 mb-2">✅ Signature Processed Successfully</h6>
+                                <div className="text-sm text-green-700 space-y-1">
+                                  <div><strong>Loan ID:</strong> {processedSignature.loan_id}</div>
+                                  <div><strong>Transaction ID:</strong> <code className="bg-green-100 px-1 rounded text-xs">{processedSignature.txid}</code></div>
+                                  <div><strong>Output Index:</strong> {processedSignature.vout}</div>
+                                  <div><strong>Signature:</strong> <code className="bg-green-100 px-1 rounded text-xs">{processedSignature.sig_borrower?.substring(0, 20)}...</code></div>
+                                </div>
+                                <div className="mt-3 text-sm text-green-600">
+                                  <strong>Next Step:</strong> The lender can now see your signature and extend a loan offer. Once you accept the loan offer and reveal your preimage, the lender can complete the witness.
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -731,20 +1283,25 @@ export default function BorrowerPage() {
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">📋 Step 1: Prepare Collateral</h2>
             <p className="text-gray-600 mb-6">
-              Enter your loan details to get the escrow address where you need to send BTC to be used as collateral.
+              Enter your loan details to get the P2TR (Taproot) escrow address where you need to send BTC to be used as collateral.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (ETH)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (rBTC)</label>
                 <input
                   type="number"
                   step="0.001"
                   value={prepareCollateralData.loanAmount}
                   onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, loanAmount: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    validateLoanAmount(prepareCollateralData.loanAmount).error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   placeholder="0.01"
                 />
+                {validateLoanAmount(prepareCollateralData.loanAmount).error && (
+                  <p className="text-xs text-red-500 mt-1">{validateLoanAmount(prepareCollateralData.loanAmount).error}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Your x-only BTC Public Key (64 chars)</label>
@@ -752,10 +1309,14 @@ export default function BorrowerPage() {
                   type="text"
                   value={prepareCollateralData.btcPubkey}
                   onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, btcPubkey: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    validateBtcPubkey(prepareCollateralData.btcPubkey).error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   maxLength={64}
                 />
+                {validateBtcPubkey(prepareCollateralData.btcPubkey).error && (
+                  <p className="text-xs text-red-500 mt-1">{validateBtcPubkey(prepareCollateralData.btcPubkey).error}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Your Preimage Hash (66 chars starting with 0x)</label>
@@ -763,16 +1324,31 @@ export default function BorrowerPage() {
                   type="text"
                   value={prepareCollateralData.preimageHash}
                   onChange={(e) => setPrepareCollateralData(prev => ({ ...prev, preimageHash: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    validatePreimageHash(prepareCollateralData.preimageHash).error ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   placeholder="0x..."
                 />
+                {validatePreimageHash(prepareCollateralData.preimageHash).error && (
+                  <p className="text-xs text-red-500 mt-1">{validatePreimageHash(prepareCollateralData.preimageHash).error}</p>
+                )}
               </div>
             </div>
             
             <button
               onClick={handlePrepareCollateral}
-              disabled={isPreparingCollateral || !prepareCollateralData.loanAmount || !prepareCollateralData.btcPubkey || !prepareCollateralData.preimageHash}
-              className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+              disabled={isPreparingCollateral || 
+                !validateLoanAmount(prepareCollateralData.loanAmount).isValid ||
+                !validateBtcPubkey(prepareCollateralData.btcPubkey).isValid ||
+                !validatePreimageHash(prepareCollateralData.preimageHash).isValid}
+              className={`px-6 py-3 rounded-lg transition-colors font-medium ${
+                isPreparingCollateral || 
+                !validateLoanAmount(prepareCollateralData.loanAmount).isValid ||
+                !validateBtcPubkey(prepareCollateralData.btcPubkey).isValid ||
+                !validatePreimageHash(prepareCollateralData.preimageHash).isValid
+                  ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
             >
               {isPreparingCollateral ? 'Preparing...' : 'Prepare Collateral'}
             </button>
@@ -786,21 +1362,21 @@ export default function BorrowerPage() {
                   <div>
                     <h4 className="font-medium text-green-700 mb-2">💰 Amount Breakdown</h4>
                     <div className="space-y-1 text-sm text-green-600">
-                      <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{collateralResult.loanAmount.eth} ETH</code></div>
-                      <div>Origination Fee ({collateralResult.originationFeePercentage}%): <code className="bg-green-100 px-1 rounded">{collateralResult.originationFee.eth} ETH</code></div>
-                      <div>Total Required: <code className="bg-green-100 px-1 rounded">{collateralResult.totalAmount.eth} ETH</code></div>
+                      <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{collateralResult.loanAmount.eth} rBTC</code></div>
+                      <div>Origination Fee ({collateralResult.originationFeePercentage}%): <code className="bg-green-100 px-1 rounded">{collateralResult.originationFee.eth} rBTC</code></div>
+                      <div>Total Required: <code className="bg-green-100 px-1 rounded">{collateralResult.totalAmount.eth} rBTC</code></div>
                       <div className="font-medium">Suggested Total: <code className="bg-green-100 px-1 rounded">{collateralResult.suggestedTotal.btc} BTC</code> (+200 sats for fees)</div>
                     </div>
                   </div>
                   
                   <div>
-                    <h4 className="font-medium text-green-700 mb-2">📍 Bitcoin Address (Escrow Output)</h4>
+                    <h4 className="font-medium text-green-700 mb-2">📍 P2TR Bitcoin Address (Escrow Output)</h4>
                     <div className="text-sm text-green-600">
                       <div className="font-mono break-all bg-green-100 p-2 rounded">
                         {collateralResult.bitcoinAddress}
                       </div>
                       <div className="mt-2 text-xs text-green-500">
-                        Send at least <strong>{collateralResult.suggestedTotal.btc} BTC</strong> to this address
+                        Send at least <strong>{collateralResult.suggestedTotal.btc} BTC</strong> to this P2TR address
                       </div>
                     </div>
                   </div>
@@ -829,27 +1405,38 @@ export default function BorrowerPage() {
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Request New Loan</h3>
               
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (ETH)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (rBTC)</label>
                 <input
                   type="text"
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.loanAmount ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   placeholder="0.01"
                 />
-                <p className="text-xs text-gray-500 mt-1">Minimum: 0.005 ETH</p>
+                {formErrors.loanAmount ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.loanAmount}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">Minimum: 0.005 rBTC</p>
+                )}
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">BTC Address (Escrow Output)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">BTC Address (P2TR Escrow Output)</label>
                 <input
                   type="text"
                   value={btcAddress}
                   onChange={(e) => setBtcAddress(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.btcAddress ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">Your Bitcoin address for collateral</p>
+                {formErrors.btcAddress ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.btcAddress}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">Your P2TR (Taproot) Bitcoin address for collateral (bech32m format)</p>
+                )}
               </div>
 
               <div className="mb-4">
@@ -858,11 +1445,16 @@ export default function BorrowerPage() {
                   type="text"
                   value={borrowerBtcPubkey}
                   onChange={(e) => setBorrowerBtcPubkey(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.borrowerBtcPubkey ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   maxLength={64}
                 />
-                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
+                {formErrors.borrowerBtcPubkey ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.borrowerBtcPubkey}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters</p>
+                )}
               </div>
 
               <div className="mb-4">
@@ -870,12 +1462,26 @@ export default function BorrowerPage() {
                 <input
                   type="text"
                   value={preimageHashBorrower}
-                  onChange={(e) => setValidHexString(e.target.value, setPreimageHashBorrower)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="0x..."
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (isValidHexString(value)) {
+                      setPreimageHashBorrower(value)
+                    } else {
+                      setPreimageHashBorrower(value)
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.preimageHashBorrower ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">Hash of your preimage for loan security</p>
-                <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+                {formErrors.preimageHashBorrower ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.preimageHashBorrower}</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mt-1">Hash of your preimage for loan security</p>
+                    <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+                  </>
+                )}
               </div>
 
               <div className="mb-4">
@@ -883,12 +1489,26 @@ export default function BorrowerPage() {
                 <input
                   type="text"
                   value={txidP2tr0}
-                  onChange={(e) => setValidHexString(e.target.value, setTxidP2tr0)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="0x..."
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (isValidHexString(value)) {
+                      setTxidP2tr0(value)
+                    } else {
+                      setTxidP2tr0(value)
+                    }
+                  }}
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.txidP2tr0 ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">Bitcoin transaction ID of the escrow UTXO</p>
-                <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+                {formErrors.txidP2tr0 ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.txidP2tr0}</p>
+                ) : (
+                  <>
+                    <p className="text-xs text-gray-500 mt-1">Bitcoin transaction ID of the escrow UTXO</p>
+                    <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
+                  </>
+                )}
               </div>
 
               <div className="mb-4">
@@ -897,20 +1517,38 @@ export default function BorrowerPage() {
                   type="number"
                   value={voutP2tr0}
                   onChange={(e) => setVoutP2tr0(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:border-transparent ${
+                    formErrors.voutP2tr0 ? 'border-red-300 focus:ring-red-500' : 'border-gray-300 focus:ring-green-500'
+                  }`}
                   placeholder="0"
                   min="0"
                 />
-                <p className="text-xs text-gray-500 mt-1">Output index of the escrow UTXO in the bitcoin transaction</p>
+                {formErrors.voutP2tr0 ? (
+                  <p className="text-xs text-red-500 mt-1">{formErrors.voutP2tr0}</p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">Output index of the escrow UTXO in the bitcoin transaction</p>
+                )}
               </div>
 
               <button
                 onClick={handleRequestLoan}
-                disabled={requestLoanLoading}
-                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+                disabled={requestLoanLoading || !isFormValid()}
+                className={`px-6 py-3 rounded-lg transition-colors font-medium ${
+                  requestLoanLoading || !isFormValid()
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
               >
                 {requestLoanLoading ? 'Requesting...' : 'Request Loan'}
               </button>
+              
+              {!isFormValid() && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">
+                    ⚠️ Please fill in all required fields with valid values before requesting a loan.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Loan Management */}
@@ -947,7 +1585,6 @@ export default function BorrowerPage() {
                     value={preimageBorrower}
                     onChange={(e) => setValidHexString(e.target.value, setPreimageBorrower)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="0x..."
                   />
                   <p className="text-xs text-gray-500 mt-1">Must be 0x + 64 characters</p>
                 </div>

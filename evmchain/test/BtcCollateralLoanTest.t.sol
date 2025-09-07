@@ -44,10 +44,11 @@ contract BtcCollateralLoanTest is Test {
     bytes32 public preimageHashLender = sha256(abi.encodePacked(preimageLender));
     
     event LoanRequested(uint256 indexed loanId, address indexed borrower, uint256 amount, string btcAddress);
+    event LenderPreimageHashAssociated(uint256 indexed loanId, address indexed lender, bytes32 preimageHashLender);
     event LoanOffered(uint256 indexed loanId, address indexed lender, uint256 amount, uint256 bondAmount);
-    event LoanActivated(uint256 indexed loanId, address indexed borrower);
+    event LoanActivated(uint256 indexed loanId, address indexed borrower, bytes32 preimageBorrower);
     event RepaymentAttempted(uint256 indexed loanId, address indexed borrower, uint256 amount);
-    event RepaymentAccepted(uint256 indexed loanId, address indexed lender);
+    event RepaymentAccepted(uint256 indexed loanId, address indexed lender, bytes32 preimageLender);
     event LoanDeleted(uint256 indexed loanId, address indexed borrower);
     event EtherSwapAddressSet(address indexed etherSwapAddress);
 
@@ -329,7 +330,7 @@ contract BtcCollateralLoanTest is Test {
         vm.startPrank(borrower);
         
         vm.expectEmit(true, true, false, true, address(loan));
-        emit LoanActivated(loanId, borrower);
+        emit LoanActivated(loanId, borrower, preimageBorrower);
         
         loan.acceptLoanOffer(loanId, preimageBorrower);
         
@@ -422,7 +423,7 @@ contract BtcCollateralLoanTest is Test {
         vm.startPrank(lender);
         
         vm.expectEmit(true, true, false, true, address(loan));
-        emit RepaymentAccepted(loanId, lender);
+        emit RepaymentAccepted(loanId, lender, preimageLender);
         
         loan.acceptLoanRepayment(loanId, preimageLender);
         
@@ -623,5 +624,133 @@ contract BtcCollateralLoanTest is Test {
     //     vm.expectRevert("Invalid hdr len");
     //     loan.extractTimestamp(header);
     // }
+
+    // ============ TESTS FOR associateLenderPreimageHash ============
+
+    function testAssociateLenderPreimageHash() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Check initial state - preimage hash should be zero
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, bytes32(0));
+        
+        // Associate preimage hash
+        vm.startPrank(lender);
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LenderPreimageHashAssociated(loanId, lender, preimageHashLender);
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+        
+        // Verify the preimage hash was set
+        loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, preimageHashLender);
+    }
+
+    function testAssociateLenderPreimageHashOnlyLender() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Try to associate from borrower - should fail
+        vm.startPrank(borrower);
+        vm.expectRevert("Loan: caller not lender");
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+        
+        // Try to associate from random address - should fail
+        address randomUser = makeAddr("randomUser");
+        vm.startPrank(randomUser);
+        vm.expectRevert("Loan: caller not lender");
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    function testAssociateLenderPreimageHashLoanDoesNotExist() public {
+        vm.startPrank(lender);
+        vm.expectRevert("Loan: does not exist");
+        loan.associateLenderPreimageHash(999, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    function testAssociateLenderPreimageHashWrongStatus() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        offerLoan(loanId); // This changes status to Offered
+        
+        // Try to associate after loan is offered - should fail
+        vm.startPrank(lender);
+        vm.expectRevert("Loan: incorrect status");
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    function testAssociateLenderPreimageHashUpdateExisting() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Associate first preimage hash
+        vm.startPrank(lender);
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+        
+        // Verify it was set
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, preimageHashLender);
+        
+        // Associate a different preimage hash
+        bytes32 newPreimageHash = keccak256("new_lender_preimage");
+        vm.startPrank(lender);
+        loan.associateLenderPreimageHash(loanId, newPreimageHash);
+        vm.stopPrank();
+        
+        // Verify it was updated
+        loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, newPreimageHash);
+    }
+
+    function testAssociateLenderPreimageHashZeroHash() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Associate zero hash - should work (no validation on hash value)
+        vm.startPrank(lender);
+        loan.associateLenderPreimageHash(loanId, bytes32(0));
+        vm.stopPrank();
+        
+        // Verify it was set
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, bytes32(0));
+    }
+
+    function testAssociateLenderPreimageHashEvent() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        vm.startPrank(lender);
+        vm.expectEmit(true, true, false, true, address(loan));
+        emit LenderPreimageHashAssociated(loanId, lender, preimageHashLender);
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+    }
+
+    function testAssociateLenderPreimageHashIntegrationWithExtendLoanOffer() public {
+        uint256 loanId = requestLoan(borrower, LOAN_AMOUNT);
+        
+        // Associate preimage hash first
+        vm.startPrank(lender);
+        loan.associateLenderPreimageHash(loanId, preimageHashLender);
+        vm.stopPrank();
+        
+        // Verify it's set
+        BtcCollateralLoan.Loan memory loanData = loan.getLoan(loanId);
+        assertEq(loanData.preimageHashLender, preimageHashLender);
+        
+        // Now extend loan offer - should work normally
+        vm.startPrank(lender);
+        loan.extendLoanOffer{value: LOAN_AMOUNT + (LOAN_AMOUNT * LENDER_BOND_PERCENTAGE) / 100}(
+            loanId,
+            preimageHashBorrower,
+            preimageHashLender
+        );
+        vm.stopPrank();
+        
+        // Verify loan status changed to Offered
+        loanData = loan.getLoan(loanId);
+        assertEq(uint256(loanData.status), uint256(BtcCollateralLoan.LoanStatus.Offered));
+    }
 
 } 

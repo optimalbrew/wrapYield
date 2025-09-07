@@ -64,6 +64,27 @@ app.get('/health', async (req, res) => {
   }
 })
 
+// Sync status endpoint
+app.get('/api/sync/status', (req, res) => {
+  try {
+    const lastSyncTime = evmEventMonitor.getLastSyncTime()
+    
+    res.json({
+      success: true,
+      lastSyncTime: lastSyncTime ? lastSyncTime.toISOString() : null,
+      lastSyncTimeFormatted: lastSyncTime ? lastSyncTime.toLocaleString() : 'Never',
+      isMonitoring: true, // We know it's running since we're responding
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get sync status',
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    })
+  }
+})
+
 // API routes
 app.use('/api/signatures', signaturesRouter)
 app.use('/api/bitcoin-transactions', bitcoinTransactionsRouter)
@@ -77,6 +98,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       health: '/health',
+      syncStatus: '/api/sync/status',
       signatures: '/api/signatures',
       bitcoinTransactions: '/api/bitcoin-transactions',
       bitcoinSignatures: '/api/bitcoin/signatures',
@@ -142,6 +164,7 @@ async function startServer() {
       console.log(`📁 Bitcoin Signatures API: http://localhost:${PORT}/api/bitcoin/signatures`)
       console.log(`\n📚 Available endpoints:`)
       console.log(`  GET  /health - Service health check`)
+      console.log(`  GET  /api/sync/status - Sync status and last sync time`)
       console.log(`  GET  / - API information`)
       console.log(`  POST /api/signatures - Create signature`)
       console.log(`  GET  /api/signatures/:id - Get signature`)

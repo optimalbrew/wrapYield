@@ -100,7 +100,7 @@ export function FileBasedLoanCard({ loan, userRole, onStatusUpdate }: FileBasedL
   const signatureStatus = getSignatureStatus(loan.id)
 
   // Handle EVM contract interactions
-  const handleEVMTransaction = async (functionName: string, args: any[], value?: bigint) => {
+  const handleEVMTransaction = async (functionName: any, args: readonly unknown[], value?: bigint) => {
     if (!address) {
       throw new Error('EVM wallet not connected')
     }
@@ -113,8 +113,8 @@ export function FileBasedLoanCard({ loan, userRole, onStatusUpdate }: FileBasedL
         address: CONTRACTS.BTC_COLLATERAL_LOAN as `0x${string}`,
         abi: BTC_COLLATERAL_LOAN_ABI,
         functionName,
-        args,
-        value
+        args: args as any,
+        value: value as any
       })
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'EVM transaction failed'
@@ -256,7 +256,7 @@ export function FileBasedLoanCard({ loan, userRole, onStatusUpdate }: FileBasedL
             Loan #{loan.evmContractId}
           </h3>
           <p className="text-sm text-gray-600">
-            Amount: {formatEther(BigInt(loan.amount))} ETH
+            Amount: {formatEther(BigInt(loan.amount))} rBTC
           </p>
         </div>
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(loan.status)}`}>

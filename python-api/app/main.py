@@ -61,6 +61,10 @@ async def startup_event():
             port=settings.port,
             lender_configured=bool(settings.lender_pubkey)
         )
+        
+        # Ensure Bitcoin wallet is initialized and funded
+        await ensure_wallet_ready()
+        
     except Exception as e:
         logger.error("Failed to start service", error=str(e))
         raise
@@ -317,7 +321,9 @@ async def generate_borrower_signature(request: BorrowerSignatureRequest):
             escrow_vout=request.escrow_vout,
             borrower_pubkey=request.borrower_pubkey,
             lender_pubkey=request.lender_pubkey,
+            preimage_hash_borrower=request.preimage_hash_borrower,
             preimage_hash_lender=request.preimage_hash_lender,
+            borrower_timelock=request.borrower_timelock,
             lender_timelock=request.lender_timelock,
             collateral_amount=request.collateral_amount,
             origination_fee=request.origination_fee
@@ -949,6 +955,32 @@ if settings.log_level == "debug":
             "transaction_timeout": settings.transaction_timeout
         }
     
+
+async def ensure_wallet_ready():
+    """Ensure Bitcoin wallet is initialized and has sufficient funds for testing."""
+    try:
+        # This will trigger wallet initialization if not already done
+        await bitcoin_rpc.get_balance()
+        
+        # Check if we have sufficient funds (at least 1 BTC for testing)
+        balance = await bitcoin_rpc.get_balance()
+        logger.info(f"Wallet balance: {balance} BTC")
+        
+        if balance < 1.0:
+            logger.info("Wallet balance low, generating additional blocks for testing")
+            # Generate more blocks to get more funds
+            test_address = await bitcoin_rpc.get_new_address("funding")
+            await bitcoin_rpc.generate_blocks(10, test_address)
+            
+            # Check balance again
+            new_balance = await bitcoin_rpc.get_balance()
+            logger.info(f"Wallet balance after funding: {new_balance} BTC")
+            
+        logger.info("Wallet is ready for operations")
+        
+    except Exception as e:
+        logger.error(f"Failed to ensure wallet readiness: {e}")
+        raise
 
 
 if __name__ == "__main__":

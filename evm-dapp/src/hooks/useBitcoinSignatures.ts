@@ -60,7 +60,7 @@ export function useBitcoinSignatures() {
           
           resolve(data)
         } catch (error) {
-          reject(new Error(`Failed to parse signature file: ${error.message}`))
+          reject(new Error(`Failed to parse signature file: ${error instanceof Error ? error.message : 'Unknown error'}`))
         }
       }
       

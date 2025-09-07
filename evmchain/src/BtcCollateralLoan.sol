@@ -128,11 +128,12 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
 
     event LenderUpdated(address indexed lender, string btcPubkey);
     event LoanRequested(uint256 indexed loanId, address indexed borrower, uint256 amount, string btcAddress);
+    event LenderPreimageHashAssociated(uint256 indexed loanId, address indexed lender, bytes32 preimageHashLender);
     event LoanOffered(uint256 indexed loanId, address indexed lender, uint256 amount, uint256 bondAmount);
-    event LoanActivated(uint256 indexed loanId, address indexed borrower);
+    event LoanActivated(uint256 indexed loanId, address indexed borrower, bytes32 preimageBorrower);
     event LoanRefundedToLender(uint256 indexed loanId, address indexed lender);
     event RepaymentAttempted(uint256 indexed loanId, address indexed borrower, uint256 amount);
-    event RepaymentAccepted(uint256 indexed loanId, address indexed lender);
+    event RepaymentAccepted(uint256 indexed loanId, address indexed lender, bytes32 preimageLender);
     event RepaymentRefundedToBorrowerWithBond(uint256 indexed loanId, address indexed borrower, uint256 bondAmount);
     event ParametersUpdated(
         uint256 loanDuration,
@@ -241,6 +242,23 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
     }
 
     /**
+     * @dev Associate lender's preimage hash with a pending loan request
+     * @param loanId The loan ID to associate preimage hash with
+     * @param preimageHashLender hash of preimage chosen by lender, when revealed borrower uses to claim BTC from collateral address
+     */
+    function associateLenderPreimageHash(uint256 loanId, bytes32 preimageHashLender)
+        external
+        onlyLender
+        loanExists(loanId)
+        correctLoanStatus(loanId, LoanStatus.Requested)
+    {
+        Loan storage loan = loans[loanId];
+        loan.preimageHashLender = preimageHashLender;
+        
+        emit LenderPreimageHashAssociated(loanId, msg.sender, preimageHashLender);
+    }
+
+    /**
      * @dev Extend loan offer by locking funds in EtherSwap
      * @param loanId The loan ID to offer
      * @param preimageHashBorrower hash of preimage chosen by borrower, when revealed lender uses to commit btc to collateral address
@@ -331,7 +349,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         // Update loan state
         loan.status = LoanStatus.Repaid;
 
-        emit RepaymentAccepted(loanId, msg.sender);
+        emit RepaymentAccepted(loanId, msg.sender, preimageLender);
     }
 
     /**
@@ -453,7 +471,7 @@ contract BtcCollateralLoan is Ownable, ReentrancyGuard {
         loan.status = LoanStatus.Active;
         loan.activationBlockheight = block.number;       
 
-        emit LoanActivated(loanId, msg.sender);
+        emit LoanActivated(loanId, msg.sender, preimageBorrower);
     }
 
     /**

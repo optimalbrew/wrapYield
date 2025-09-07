@@ -27,14 +27,14 @@ export const loanStatuses = [
 // Loans table - main loan tracking
 export const loans = pgTable('loans', {
   id: uuid('id').primaryKey().defaultRandom(),
-  evmContractId: bigint('evm_contract_id', { mode: 'bigint' }), // Loan ID from smart contract
+  evmContractId: varchar('evm_contract_id', { length: 50 }), // Loan ID from smart contract (stored as string)
   borrowerId: uuid('borrower_id').notNull().references(() => users.id),
   lenderId: uuid('lender_id').references(() => users.id),
   
-  // Loan parameters
-  amount: decimal('amount', { precision: 18, scale: 8 }).notNull(), // Loan amount in BTC/ETH
-  collateralAmount: decimal('collateral_amount', { precision: 18, scale: 8 }),
-  bondAmount: decimal('bond_amount', { precision: 18, scale: 8 }),
+  // Loan parameters (stored as NUMERIC to avoid BigInt serialization issues)
+  amount: decimal('amount', { precision: 78, scale: 0 }).notNull(), // Loan amount in BTC/ETH
+  collateralAmount: decimal('collateral_amount', { precision: 78, scale: 0 }),
+  bondAmount: decimal('bond_amount', { precision: 78, scale: 0 }),
   interestRate: decimal('interest_rate', { precision: 5, scale: 2 }), // Annual percentage
   durationBlocks: integer('duration_blocks').notNull(),
   
@@ -48,8 +48,10 @@ export const loans = pgTable('loans', {
   collateralAddress: varchar('collateral_address', { length: 63 }),
   
   // Preimage hashes for HTLC
-  preimageHashBorrower: varchar('preimage_hash_borrower', { length: 64 }),
-  preimageHashLender: varchar('preimage_hash_lender', { length: 64 }),
+  preimageHashBorrower: varchar('preimage_hash_borrower', { length: 66 }),
+  preimageHashLender: varchar('preimage_hash_lender', { length: 66 }),
+  preimageBorrower: varchar('preimage_borrower', { length: 66 }), // Revealed preimage from loan acceptance
+  preimageLender: varchar('preimage_lender', { length: 66 }), // Revealed preimage from repayment acceptance
   
   // Timelock parameters (in blocks)
   timelockLoanReq: integer('timelock_loan_req').notNull(),
@@ -57,11 +59,11 @@ export const loans = pgTable('loans', {
   timelockRepaymentAccept: integer('timelock_repayment_accept').notNull(),
   timelockBtcCollateral: integer('timelock_btc_collateral').notNull(),
   
-  // Block heights for tracking
-  requestBlockHeight: bigint('request_block_height', { mode: 'bigint' }),
-  offerBlockHeight: bigint('offer_block_height', { mode: 'bigint' }),
-  activationBlockHeight: bigint('activation_block_height', { mode: 'bigint' }),
-  repaymentBlockHeight: bigint('repayment_block_height', { mode: 'bigint' }),
+  // Block heights for tracking (stored as NUMERIC to avoid BigInt serialization issues)
+  requestBlockHeight: decimal('request_block_height', { precision: 20, scale: 0 }),
+  offerBlockHeight: decimal('offer_block_height', { precision: 20, scale: 0 }),
+  activationBlockHeight: decimal('activation_block_height', { precision: 20, scale: 0 }),
+  repaymentBlockHeight: decimal('repayment_block_height', { precision: 20, scale: 0 }),
   
   // Metadata
   metadata: jsonb('metadata'), // Additional loan-specific data
@@ -269,3 +271,19 @@ export const insertAlertSchema = createInsertSchema(alerts)
 export const selectAlertSchema = createSelectSchema(alerts)
 export type Alert = z.infer<typeof selectAlertSchema>
 export type NewAlert = z.infer<typeof insertAlertSchema>
+
+// Simple borrower signatures table - just what we need
+export const borrowerSignatures = pgTable('borrower_signatures', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  loanId: varchar('loan_id', { length: 50 }).notNull(),
+  signatureData: jsonb('signature_data').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+})
+
+// Zod schemas for borrower signatures
+export const selectBorrowerSignatureSchema = createSelectSchema(borrowerSignatures)
+export const insertBorrowerSignatureSchema = createInsertSchema(borrowerSignatures)
+
+export type BorrowerSignature = z.infer<typeof selectBorrowerSignatureSchema>
+export type NewBorrowerSignature = z.infer<typeof insertBorrowerSignatureSchema>
+

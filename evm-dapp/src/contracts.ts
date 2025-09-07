@@ -113,6 +113,16 @@ export const BTC_COLLATERAL_LOAN_ABI = [
   },
   {
     "type": "function",
+    "name": "associateLenderPreimageHash",
+    "inputs": [
+      {"name": "loanId", "type": "uint256"},
+      {"name": "preimageHashLender", "type": "bytes32"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "extendLoanOffer",
     "inputs": [
       {"name": "loanId", "type": "uint256"},

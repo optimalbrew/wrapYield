@@ -85,10 +85,6 @@ export interface BlockchainConfig {
 export interface SecurityConfig {
   maxActiveLoansPerBorrower: number
   lenderSlashingEnabled: boolean
-  emergencyPause: {
-    enabled: boolean
-    description: string
-  }
 }
 
 export interface Config {

@@ -83,7 +83,7 @@ router.post('/', async (req, res) => {
       })
     ])
 
-    // Calculate origination fee
+    // Calculate origination fee: parsing as ETH, but in Rootstock, this is rBTC
     const loanAmountWei = parseEther(loanAmount.toString())
     const originationFeeWei = (loanAmountWei * BigInt(originationFeePercentage)) / BigInt(100)
     const totalAmountWei = loanAmountWei + originationFeeWei
@@ -117,8 +117,9 @@ router.post('/', async (req, res) => {
       const pythonData = await pythonResponse.json() as any
 
       // Calculate suggested total with 200 sats buffer
-      const suggestedTotalSats = Math.ceil(parseFloat(totalAmountEth) * 100000000) + 200 // Convert ETH to sats + 200 buffer
-      const suggestedTotalBtc = suggestedTotalSats / 100000000
+      const suggestedTotalSats = Math.ceil(parseFloat(totalAmountEth) * 100000000) + 200 // Convert to sats + 200 buffer
+      const suggestedTotalBtc = suggestedTotalSats / 100000000 // Convert to BTC and round to 8 decimal places
+      const suggestedTotalBtcRounded = Number(suggestedTotalBtc.toFixed(8))
 
       return res.json({
         success: true,
@@ -145,7 +146,7 @@ router.post('/', async (req, res) => {
           },
           suggestedTotal: {
             sats: suggestedTotalSats,
-            btc: suggestedTotalBtc,
+            btc: suggestedTotalBtcRounded,
             note: 'Includes 200 sats buffer for Bitcoin fees'
           },
           

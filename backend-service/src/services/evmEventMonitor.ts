@@ -2,22 +2,140 @@ import { ethers } from 'ethers'
 import { eq } from 'drizzle-orm'
 import databaseService from './databaseService'
 import { loans, users } from '../db/schema'
+import fs from 'fs'
+import path from 'path'
 
-// Complete ABI for all BtcCollateralLoan events
-const BTC_COLLATERAL_LOAN_ABI = [
-  "event LenderUpdated(address indexed lender, string btcPubkey)",
-  "event LoanRequested(uint256 indexed loanId, address indexed borrower, uint256 amount, string btcAddress)",
-  "event LoanOffered(uint256 indexed loanId, address indexed lender, uint256 amount, uint256 bondAmount)",
-  "event LoanActivated(uint256 indexed loanId, address indexed borrower)",
-  "event LoanRefundedToLender(uint256 indexed loanId, address indexed lender)",
-  "event RepaymentAttempted(uint256 indexed loanId, address indexed borrower, uint256 amount)",
-  "event RepaymentAccepted(uint256 indexed loanId, address indexed lender)",
-  "event RepaymentRefundedToBorrowerWithBond(uint256 indexed loanId, address indexed borrower, uint256 bondAmount)",
-  "event ParametersUpdated(uint256 timelockLoanReq, uint256 timelockBtcEscrow, uint256 timelockRepaymentAccept, uint256 timelockBtcCollateral)",
-  "event LoanDefaulted(uint256 indexed loanId, address indexed lender, uint256 bondAmount)",
-  "event LoanDeleted(uint256 indexed loanId, address indexed borrower)",
-  "event EtherSwapAddressSet(address indexed etherSwapAddress)"
+// Load full ABI from generated contract file
+const ABI_PATH = path.join(__dirname, '../../contracts/BtcCollateralLoan.json')
+const BTC_COLLATERAL_LOAN_ABI = JSON.parse(fs.readFileSync(ABI_PATH, 'utf8')).abi
+
+// Fallback hardcoded ABI (commented out - using full ABI instead)
+/*
+  {
+    "type": "event",
+    "name": "LoanRequested",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "borrower", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false },
+      { "name": "btcAddress", "type": "string", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LenderPreimageHashAssociated",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "lender", "type": "address", "indexed": true },
+      { "name": "preimageHashLender", "type": "bytes32", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LoanOffered",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "lender", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false },
+      { "name": "bondAmount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LoanActivated",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "borrower", "type": "address", "indexed": true },
+      { "name": "preimageBorrower", "type": "bytes32", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LoanRefundedToLender",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "lender", "type": "address", "indexed": true }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RepaymentAttempted",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "borrower", "type": "address", "indexed": true },
+      { "name": "amount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RepaymentAccepted",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "lender", "type": "address", "indexed": true },
+      { "name": "preimageLender", "type": "bytes32", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RepaymentRefundedToBorrowerWithBond",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "borrower", "type": "address", "indexed": true },
+      { "name": "bondAmount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ParametersUpdated",
+    "inputs": [
+      { "name": "loanDuration", "type": "uint256", "indexed": false },
+      { "name": "timelockLoanReq", "type": "uint256", "indexed": false },
+      { "name": "timelockBtcEscrow", "type": "uint256", "indexed": false },
+      { "name": "timelockRepaymentAccept", "type": "uint256", "indexed": false },
+      { "name": "timelockBtcCollateral", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LoanDefaulted",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "lender", "type": "address", "indexed": true },
+      { "name": "bondAmount", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "LoanDeleted",
+    "inputs": [
+      { "name": "loanId", "type": "uint256", "indexed": true },
+      { "name": "borrower", "type": "address", "indexed": true }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EtherSwapAddressSet",
+    "inputs": [
+      { "name": "etherSwapAddress", "type": "address", "indexed": true }
+    ],
+    "anonymous": false
+  }
 ]
+
+*/
+
+console.log(`📋 Using full ABI with ${BTC_COLLATERAL_LOAN_ABI.length} events and functions`)
 
 class EVMEventMonitor {
   private provider: ethers.Provider
@@ -25,14 +143,25 @@ class EVMEventMonitor {
   private isMonitoring: boolean = false
   private lastProcessedBlock: number = 0
   private processedEvents: Set<string> = new Set() // Track processed events by txHash+logIndex
+  private lastSyncTime: Date | null = null // Track when last sync occurred
 
   constructor() {
-    const rpcUrl = process.env.EVM_RPC_URL || 'http://host.docker.internal:8545'
+    const rpcUrl = process.env.ANVIL_RPC_URL || process.env.EVM_RPC_URL || 'http://host.docker.internal:8545'
     this.provider = new ethers.JsonRpcProvider(rpcUrl)
     
     // Contract address from our deployment
     const contractAddress = process.env.BTC_COLLATERAL_LOAN_ADDRESS || '0x02b8aFd8146b7Bc6BD4F02782c18bd4649Be1605'
+    
+    console.log(`📋 Loading ABI with ${BTC_COLLATERAL_LOAN_ABI.length} items`)
+    console.log(`📋 Contract address: ${contractAddress}`)
+    
     this.contract = new ethers.Contract(contractAddress, BTC_COLLATERAL_LOAN_ABI, this.provider)
+    
+    // Log available events
+    const eventNames = this.contract.interface.fragments
+      .filter(f => f.type === 'event')
+      .map(f => (f as any).name)
+    console.log(`📋 Available events: ${eventNames.join(', ')}`)
   }
 
   async startMonitoring() {
@@ -98,47 +227,143 @@ class EVMEventMonitor {
     }
   }
 
+  private manualParseEvent(event: any): any {
+    const eventSignature = event.topics[0]
+    console.log(`🔍 Manual parsing event with signature: ${eventSignature}`)
+    
+    // LoanRequested(uint256 indexed loanId, address indexed borrower, uint256 amount, string btcAddress)
+    if (eventSignature === '0xfbba0893dd1f941cb4a7bb791aed3ce1ad2a008c20ef3254b2a2cf7752b199f1') {
+      console.log(`📋 Manually parsing LoanRequested event`)
+      const loanId = BigInt(event.topics[1])
+      const borrower = '0x' + event.topics[2].slice(26) // Remove padding
+      
+      // Parse the data field for amount and btcAddress
+      const data = event.data.slice(2) // Remove 0x prefix
+      const amount = BigInt('0x' + data.slice(0, 64))
+      
+      // For the string (btcAddress), we need to decode it from the data
+      // The string is at offset 0x40 (64 bytes) in the data
+      const stringOffset = parseInt(data.slice(64, 128), 16) * 2 // Convert to hex offset
+      const stringLength = parseInt(data.slice(stringOffset, stringOffset + 64), 16) * 2
+      const btcAddressHex = data.slice(stringOffset + 64, stringOffset + 64 + stringLength)
+      const btcAddress = Buffer.from(btcAddressHex, 'hex').toString('utf8')
+      
+      console.log(`📋 Parsed LoanRequested: loanId=${loanId}, borrower=${borrower}, amount=${amount}, btcAddress=${btcAddress}`)
+      
+      return {
+        fragment: { name: 'LoanRequested' },
+        args: {
+          loanId,
+          borrower,
+          amount,
+          btcAddress
+        }
+      }
+    }
+    
+    // LenderPreimageHashAssociated(uint256 indexed loanId, address indexed lender, bytes32 preimageHashLender)
+    if (eventSignature === '0xba765ac80d70c6ea721691828df85ccb151235037e23926de29f6a436ed1d79c') {
+      const loanId = BigInt(event.topics[1])
+      const lender = '0x' + event.topics[2].slice(26) // Remove padding
+      const preimageHashLender = event.data
+      
+      return {
+        fragment: { name: 'LenderPreimageHashAssociated' },
+        args: {
+          loanId,
+          lender,
+          preimageHashLender
+        }
+      }
+    }
+    
+    // Add other event signatures as needed
+    return null
+  }
+
   private async handleEvent(event: any) {
     try {
-      const eventName = event.fragment?.name || 'Unknown'
+      console.log(`📋 Full event object:`, JSON.stringify(event, null, 2))
+      
+      // If this is a raw event log, try to parse it with the contract
+      let parsedEvent = event
+      if (event.topics && !event.fragment) {
+        console.log(`📋 Parsing raw event log with contract ABI...`)
+        try {
+          // Parse the raw event using the contract interface
+          parsedEvent = this.contract.interface.parseLog(event)
+          console.log(`📋 Parsed event:`, parsedEvent)
+          
+          // If ABI parsing returned null, try manual parsing
+          if (!parsedEvent) {
+            console.log(`❌ ABI parsing returned null, trying manual parsing...`)
+            parsedEvent = this.manualParseEvent(event)
+            if (!parsedEvent) {
+              console.log(`❌ Manual parsing also failed`)
+              return
+            }
+          }
+        } catch (parseError) {
+          console.log(`❌ Failed to parse event with ABI, trying manual parsing...`)
+          // Manual parsing for known events
+          parsedEvent = this.manualParseEvent(event)
+          if (!parsedEvent) {
+            console.log(`❌ Manual parsing also failed`)
+            return
+          }
+        }
+      }
+      
+      // Check if parsedEvent is null after all parsing attempts
+      if (!parsedEvent) {
+        console.log(`❌ All parsing attempts failed`)
+        return
+      }
+      
+      const eventName = parsedEvent.fragment?.name || 'Unknown'
       console.log(`📋 Processing ${eventName} event...`)
+      console.log(`   Event fragment:`, parsedEvent.fragment)
+      console.log(`   Event args:`, parsedEvent.args)
 
       switch (eventName) {
         case 'LenderUpdated':
-          await this.handleLenderUpdated(event)
+          await this.handleLenderUpdated(parsedEvent)
           break
         case 'LoanRequested':
-          await this.handleLoanRequested(event)
+          await this.handleLoanRequested(parsedEvent)
+          break
+        case 'LenderPreimageHashAssociated':
+          await this.handleLenderPreimageHashAssociated(parsedEvent)
           break
         case 'LoanOffered':
-          await this.handleLoanOffered(event)
+          await this.handleLoanOffered(parsedEvent)
           break
         case 'LoanActivated':
-          await this.handleLoanActivated(event)
+          await this.handleLoanActivated(parsedEvent)
           break
         case 'LoanRefundedToLender':
-          await this.handleLoanRefundedToLender(event)
+          await this.handleLoanRefundedToLender(parsedEvent)
           break
         case 'RepaymentAttempted':
-          await this.handleRepaymentAttempted(event)
+          await this.handleRepaymentAttempted(parsedEvent)
           break
         case 'RepaymentAccepted':
-          await this.handleRepaymentAccepted(event)
+          await this.handleRepaymentAccepted(parsedEvent)
           break
         case 'RepaymentRefundedToBorrowerWithBond':
-          await this.handleRepaymentRefundedToBorrowerWithBond(event)
+          await this.handleRepaymentRefundedToBorrowerWithBond(parsedEvent)
           break
         case 'ParametersUpdated':
-          await this.handleParametersUpdated(event)
+          await this.handleParametersUpdated(parsedEvent)
           break
         case 'LoanDefaulted':
-          await this.handleLoanDefaulted(event)
+          await this.handleLoanDefaulted(parsedEvent)
           break
         case 'LoanDeleted':
-          await this.handleLoanDeleted(event)
+          await this.handleLoanDeleted(parsedEvent)
           break
         case 'EtherSwapAddressSet':
-          await this.handleEtherSwapAddressSet(event)
+          await this.handleEtherSwapAddressSet(parsedEvent)
           break
         default:
           console.log(`⚠️ Unknown event type: ${eventName}`)
@@ -192,11 +417,32 @@ class EVMEventMonitor {
       const amount = event.args.amount.toString()
       const btcAddress = event.args.btcAddress
 
-      console.log(`📋 Loan Details:`)
+      console.log(`📋 Loan Details from event:`)
       console.log(`   ID: ${loanId}`)
       console.log(`   Borrower: ${borrowerAddress}`)
       console.log(`   Amount: ${amount} wei`)
       console.log(`   BTC Address: ${btcAddress}`)
+
+      // Query contract for complete loan details
+      console.log(`🔍 Querying contract for complete loan details...`)
+      const contract = new ethers.Contract(
+        process.env.CONTRACT_ADDRESS || '0x02b8aFd8146b7Bc6BD4F02782c18bd4649Be1605',
+        BTC_COLLATERAL_LOAN_ABI,
+        this.provider
+      )
+      
+      const loanData = await contract.getLoan(loanId)
+      console.log(`📋 Complete loan data from contract:`)
+      console.log(`   Borrower BTC Pubkey: ${loanData.borrowerBtcPubkey}`)
+      console.log(`   Preimage Hash Borrower: ${loanData.preimageHashBorrower}`)
+      console.log(`   TXID P2TR0: ${loanData.txid_p2tr0}`)
+      console.log(`   VOUT P2TR0: ${loanData.vout_p2tr0}`)
+      console.log(`   Status: ${loanData.status}`)
+      console.log(`   Bond Amount: ${loanData.bondAmount}`)
+      console.log(`   Preimage Hash Lender: ${loanData.preimageHashLender}`)
+      console.log(`   Offer Block Height: ${loanData.offerBlockheight}`)
+      console.log(`   Activation Block Height: ${loanData.activationBlockheight}`)
+      console.log(`   Repayment Block Height: ${loanData.repaymentBlockheight}`)
 
       // Store in database
       const db = databaseService.getDatabase()
@@ -223,28 +469,69 @@ class EVMEventMonitor {
           return
         }
 
-        // Insert loan record
+        // Insert loan record with complete data from contract
         await db.insert(loans).values({
-          evmContractId: BigInt(loanId),
+          evmContractId: loanId.toString(),
           borrowerId: borrowerUser.id,
           amount: amount,
           durationBlocks: 100, // Default duration
           status: 'requested',
-          borrowerBtcPubkey: '', // Will be filled later
+          borrowerBtcPubkey: loanData.borrowerBtcPubkey,
+          preimageHashBorrower: loanData.preimageHashBorrower,
+          btcTxid: loanData.txid_p2tr0,
+          btcVout: Number(loanData.vout_p2tr0),
+          btcAddress: btcAddress,
+          preimageHashLender: loanData.preimageHashLender,
           timelockLoanReq: 100,
           timelockBtcEscrow: 100,
           timelockRepaymentAccept: 100,
           timelockBtcCollateral: 100,
-          requestBlockHeight: BigInt(event.blockNumber),
+          requestBlockHeight: event.blockNumber,
+          offerBlockHeight: loanData.offerBlockheight ? Number(loanData.offerBlockheight) : null,
+          activationBlockHeight: loanData.activationBlockheight ? Number(loanData.activationBlockheight) : null,
+          repaymentBlockHeight: loanData.repaymentBlockheight ? Number(loanData.repaymentBlockheight) : null,
           createdAt: new Date(),
           updatedAt: new Date()
         })
 
         console.log(`✅ Loan ${loanId} stored in database`)
+        
+        // Trigger sync after processing loan request
+        setTimeout(() => {
+          this.syncExistingLoans()
+        }, 5000) // Wait 5 seconds for transaction to be mined
       }
 
     } catch (error) {
       console.error('❌ Error handling LoanRequested event:', error)
+    }
+  }
+
+  private async handleLenderPreimageHashAssociated(event: any) {
+    console.log('🔗 Processing LenderPreimageHashAssociated event...')
+    const loanId = event.args.loanId.toString()
+    const lenderAddress = event.args.lender
+    const preimageHashLender = event.args.preimageHashLender
+    
+    console.log(`   Loan ID: ${loanId}`)
+    console.log(`   Lender: ${lenderAddress}`)
+    console.log(`   Preimage Hash: ${preimageHashLender}`)
+    
+    // Update loan with lender preimage hash
+    const db = databaseService.getDatabase()
+    if (db) {
+      try {
+        await db.update(loans)
+          .set({
+            preimageHashLender: preimageHashLender,
+            updatedAt: new Date()
+          })
+          .where(eq(loans.evmContractId, loanId.toString()))
+        
+        console.log(`✅ Loan ${loanId} updated with lender preimage hash`)
+      } catch (error) {
+        console.error('❌ Error updating lender preimage hash:', error)
+      }
     }
   }
 
@@ -265,7 +552,7 @@ class EVMEventMonitor {
     if (db) {
       try {
         // Find the loan
-        const existingLoans = await db.select().from(loans).where(eq(loans.evmContractId, BigInt(loanId))).limit(1)
+        const existingLoans = await db.select().from(loans).where(eq(loans.evmContractId, loanId.toString())).limit(1)
         if (existingLoans.length > 0) {
           // Get or create lender user
           let lenderUser
@@ -288,10 +575,10 @@ class EVMEventMonitor {
               lenderId: lenderUser.id,
               bondAmount: bondAmount,
               status: 'offered',
-              offerBlockHeight: BigInt(event.blockNumber),
+              offerBlockHeight: event.blockNumber,
               updatedAt: new Date()
             })
-            .where(eq(loans.evmContractId, BigInt(loanId)))
+            .where(eq(loans.evmContractId, loanId.toString()))
           
           console.log(`✅ Loan ${loanId} updated with offer`)
         }
@@ -305,23 +592,26 @@ class EVMEventMonitor {
     console.log('🚀 Processing LoanActivated event...')
     const loanId = event.args.loanId.toString()
     const borrowerAddress = event.args.borrower
+    const preimageBorrower = event.args.preimageBorrower
     
     console.log(`   Loan ID: ${loanId}`)
     console.log(`   Borrower: ${borrowerAddress}`)
+    console.log(`   Preimage: ${preimageBorrower}`)
     
-    // Update loan status
+    // Update loan status and store preimage
     const db = databaseService.getDatabase()
     if (db) {
       try {
         await db.update(loans)
           .set({
             status: 'active',
-            activationBlockHeight: BigInt(event.blockNumber),
+            activationBlockHeight: event.blockNumber,
+            preimageBorrower: preimageBorrower,
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
-        console.log(`✅ Loan ${loanId} activated`)
+        console.log(`✅ Loan ${loanId} activated with preimage stored`)
       } catch (error) {
         console.error('❌ Error activating loan:', error)
       }
@@ -345,7 +635,7 @@ class EVMEventMonitor {
             status: 'refunded_to_lender',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} refunded to lender`)
       } catch (error) {
@@ -373,7 +663,7 @@ class EVMEventMonitor {
             status: 'repayment_attempted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} repayment attempted`)
       } catch (error) {
@@ -386,23 +676,26 @@ class EVMEventMonitor {
     console.log('✅ Processing RepaymentAccepted event...')
     const loanId = event.args.loanId.toString()
     const lenderAddress = event.args.lender
+    const preimageLender = event.args.preimageLender
     
     console.log(`   Loan ID: ${loanId}`)
     console.log(`   Lender: ${lenderAddress}`)
+    console.log(`   Preimage: ${preimageLender}`)
     
-    // Update loan status
+    // Update loan status and store preimage
     const db = databaseService.getDatabase()
     if (db) {
       try {
         await db.update(loans)
           .set({
             status: 'repayment_accepted',
-            repaymentBlockHeight: BigInt(event.blockNumber),
+            repaymentBlockHeight: event.blockNumber,
+            preimageLender: preimageLender,
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
-        console.log(`✅ Loan ${loanId} repayment accepted`)
+        console.log(`✅ Loan ${loanId} repayment accepted with preimage stored`)
       } catch (error) {
         console.error('❌ Error updating repayment acceptance:', error)
       }
@@ -428,7 +721,7 @@ class EVMEventMonitor {
             status: 'repayment_refunded_with_bond',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} repayment refunded with bond`)
       } catch (error) {
@@ -472,7 +765,7 @@ class EVMEventMonitor {
             status: 'defaulted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} defaulted`)
       } catch (error) {
@@ -498,7 +791,7 @@ class EVMEventMonitor {
             status: 'deleted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, BigInt(loanId)))
+          .where(eq(loans.evmContractId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} deleted`)
       } catch (error) {
@@ -522,6 +815,62 @@ class EVMEventMonitor {
     console.log('🛑 Stopping EVM event monitoring...')
     this.isMonitoring = false
   }
+
+  // Get last sync time for UI display
+  getLastSyncTime(): Date | null {
+    return this.lastSyncTime
+  }
+
+  // Sync existing loans with contract data
+  private async syncExistingLoans() {
+    try {
+      console.log('🔄 Starting event-triggered sync of existing loans...')
+      
+      const db = databaseService.getDatabase()
+      if (!db) {
+        console.error('❌ Database not available for sync')
+        return
+      }
+
+      // Get total number of loans from contract
+      const totalLoans = await this.contract.getTotalLoans()
+      console.log(`📊 Total loans on contract: ${totalLoans}`)
+      
+      // Query each loan and update database
+      for (let i = 1; i <= Number(totalLoans); i++) {
+        try {
+          const loanData = await this.contract.getLoan(i)
+          
+          // Update database with complete loan data
+          await db.update(loans)
+            .set({
+              borrowerBtcPubkey: loanData.borrowerBtcPubkey,
+              preimageHashBorrower: loanData.preimageHashBorrower,
+              btcTxid: loanData.txid_p2tr0,
+              btcVout: Number(loanData.vout_p2tr0),
+              preimageHashLender: loanData.preimageHashLender,
+              offerBlockHeight: loanData.offerBlockheight ? Number(loanData.offerBlockheight) : null,
+              activationBlockHeight: loanData.activationBlockheight ? Number(loanData.activationBlockheight) : null,
+              repaymentBlockHeight: loanData.repaymentBlockheight ? Number(loanData.repaymentBlockheight) : null,
+              updatedAt: new Date()
+            })
+            .where(eq(loans.evmContractId, i.toString()))
+          
+          console.log(`✅ Synced loan ${i}`)
+        } catch (error) {
+          console.error(`❌ Error syncing loan ${i}:`, error instanceof Error ? error.message : 'Unknown error')
+        }
+      }
+      
+      // Update last sync time
+      this.lastSyncTime = new Date()
+      console.log(`✅ Event-triggered sync completed at ${this.lastSyncTime.toISOString()}`)
+      
+    } catch (error) {
+      console.error('❌ Error during event-triggered sync:', error)
+    }
+  }
+
 
   private clearOldProcessedEvents() {
     // Keep only the last 1000 processed events to prevent memory buildup

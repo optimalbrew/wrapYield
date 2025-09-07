@@ -58,13 +58,15 @@ curl -X POST "http://localhost:8001/vaultero/nums-p2tr-addr-0" \
 ```
 
 Funding arbitrary addresses: returns the `txid` and `vout`. This is useful to fund the escrow address (`nums_p2tr_addr_0`) and 
-use the returned values when requesting a loan.
+use the returned values when requesting a loan. Sometimes lazy loading of bitcoin core wallet leads to failures. 
+
+localhost:8002 for borrower python-api
 
 ```bash
-curl -X POST http://localhost:8001/bitcoin/fund-address \
+curl -X POST http://localhost:8002/bitcoin/fund-address \
   -H "Content-Type: application/json" \
   -d '{
-    "address": "bcrt1qzr7gzh9t38pupar7vq977kmplykf4chwqzv2lp",
+    "address": "bcrt1p8zquc6fyga5uldc2j3k2wscpnw44xgjuf8tpqt3ekt85vw2gqtdqlkaujg",
     "amount": 0.001,
     "label": "test-funding"
   }'
