@@ -469,6 +469,73 @@ class VaulteroService:
         except Exception as e:
             raise Exception(f"Failed to generate borrower signature: {str(e)}")
 
+    async def verify_borrower_signature(self, signature_data: Dict[str, Any], borrower_pubkey: str) -> bool:
+        """
+        Verify the validity of a borrower's signature using bitcoinutils.
+        
+        This method reconstructs the transaction and verifies the borrower's signature
+        using the same digest computation as the original signing process.
+        
+        Args:
+            signature_data: Dictionary containing signature data (from JSON file)
+            borrower_pubkey: Borrower's public key in hex format
+            
+        Returns:
+            True if signature is valid, False otherwise
+        """
+        try:
+            self._check_vaultero_availability()
+            
+            from bitcoinutils.transactions import Transaction
+            from bitcoinutils.script import Script
+            from bitcoinutils.keys import PublicKey
+            from bitcoinutils.schnorr import schnorr_verify
+            from bitcoinutils.utils import to_satoshis
+            
+            # Reconstruct the transaction from hex
+            tx = Transaction.from_raw(signature_data['tx_hex'])
+            
+            # Get the tapleaf script
+            tapleaf_script_hex = signature_data['tapleaf_script_hex']
+            tapleaf_script = Script.from_raw(tapleaf_script_hex)
+            
+            # Get the escrow address script
+            escrow_script_hex = signature_data['escrow_address_script']
+            escrow_script = Script.from_raw(escrow_script_hex)
+            
+            # Compute the transaction digest using get_transaction_taproot_digest
+            # This is the message that was signed
+            # Use ext_flag=1 for script_path=True (same as original signing)
+            digest = tx.get_transaction_taproot_digest(
+                0,  # input index
+                [escrow_script],  # script_pubkeys
+                [to_satoshis(signature_data['input_amount'])],  # amounts
+                ext_flag=1,  # ext_flag=1 for script_path=True
+                script=tapleaf_script  # the tapleaf script
+            )
+            
+            # Get the signature and convert from hex string to bytes
+            sig_borrower_hex = signature_data['sig_borrower']
+            sig_borrower = bytes.fromhex(sig_borrower_hex)
+            
+            # Convert borrower public key to PublicKey object
+            borrower_pubkey_obj = PublicKey(borrower_pubkey)
+            
+            # Verify the signature using schnorr_verify
+            # Use x-only public key (32 bytes) for schnorr verification
+            x_only_pubkey = bytes.fromhex(borrower_pubkey_obj.to_x_only_hex())
+            is_valid = schnorr_verify(
+                digest,  # message digest
+                x_only_pubkey,  # x-only public key bytes (32 bytes)
+                sig_borrower  # signature bytes (64 bytes)
+            )
+            
+            return is_valid
+            
+        except Exception as e:
+            print(f"Error during signature verification: {e}")
+            return False
+
     async def complete_lender_witness(self, signature_file_path: str, lender_private_key: str, preimage: str, mine_block: bool = True) -> str:
         """
         Complete the transaction witness using borrower's signature and lender's signature + preimage.

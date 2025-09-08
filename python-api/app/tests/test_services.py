@@ -504,6 +504,15 @@ class TestVaulteroService:
             assert "borrower_signature_test-separate-sig-workflow.json" in signature_file_path
             print(f"✅ Borrower signature saved to: {signature_file_path}")
             
+            # Step 2.5: Verify the borrower signature before proceeding
+            import json
+            with open(signature_file_path, 'r') as f:
+                signature_data = json.load(f)
+            
+            is_valid = await vaultero_service.verify_borrower_signature(signature_data, borrower_pubkey_xonly)
+            assert is_valid, "Borrower signature should be valid before proceeding with lender witness"
+            print(f"✅ Borrower signature verified as valid: {is_valid}")
+            
             # Step 3: Complete lender witness with signature file
             lender_private_key = test_keys['lender_priv'].to_wif()
             preimage = test_data['preimage_borrower']

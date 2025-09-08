@@ -59,6 +59,11 @@ class LenderWitnessRequest(BaseModel):
     preimage: str = Field(..., description="The preimage that satisfies the hashlock")
     mine_block: bool = Field(default=True, description="Whether to mine a block after broadcasting")
 
+class SignatureVerificationRequest(BaseModel):
+    """Request model for verifying borrower signature"""
+    signature_data: Dict[str, Any] = Field(..., description="Signature data dictionary from JSON file")
+    borrower_pubkey: str = Field(..., min_length=64, max_length=66, description="Borrower's public key in hex format")
+
 # Borrower Exit Escrow Models
 class BorrowerExitEscrowRequest(BaseModel):
     """Request model for borrower to exit escrow (spend escrow to exit without revealing preimage)"""

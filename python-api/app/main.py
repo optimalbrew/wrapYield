@@ -361,6 +361,52 @@ async def generate_borrower_signature(request: BorrowerSignatureRequest):
             detail=f"Failed to generate borrower signature: {str(e)}"
         )
 
+@app.post("/transactions/verify-signature", response_model=APIResponse)
+async def verify_borrower_signature(request: SignatureVerificationRequest):
+    """
+    Verify the validity of a borrower's signature using bitcoinutils.
+    
+    This endpoint verifies that a borrower's signature is valid by reconstructing
+    the transaction digest and using schnorr signature verification.
+    """
+    try:
+        logger.info(
+            "Verifying borrower signature",
+            borrower_pubkey=request.borrower_pubkey[:16] + "..."
+        )
+        
+        is_valid = await vaultero_service.verify_borrower_signature(
+            request.signature_data, request.borrower_pubkey
+        )
+        
+        logger.info(
+            "Borrower signature verification completed",
+            is_valid=is_valid,
+            borrower_pubkey=request.borrower_pubkey[:16] + "..."
+        )
+        
+        return APIResponse(
+            success=True,
+            data={
+                "is_valid": is_valid,
+                "borrower_pubkey": request.borrower_pubkey,
+                "message": "Signature is valid" if is_valid else "Signature is invalid"
+            },
+            message="Signature verification completed successfully"
+        )
+        
+    except Exception as e:
+        logger.error(
+            "Failed to verify borrower signature",
+            borrower_pubkey=request.borrower_pubkey[:16] + "...",
+            error=str(e),
+            traceback=traceback.format_exc()
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify borrower signature: {str(e)}"
+        )
+
 @app.post("/transactions/complete-witness", response_model=APIResponse)
 async def complete_lender_witness(request: LenderWitnessRequest):
     """

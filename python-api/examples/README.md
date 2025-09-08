@@ -218,6 +218,43 @@ curl -X POST "http://localhost:8001/transactions/collateral" \
   }'
 ```
 
+### Signature Verification
+
+**Endpoint**: `POST /transactions/verify-signature`
+
+**Description**: Verify the validity of a borrower's signature using bitcoinutils. This endpoint reconstructs the transaction digest and uses schnorr signature verification to validate the signature.
+
+**Usage**:
+```bash
+curl -X POST "http://localhost:8001/transactions/verify-signature" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signature_data": {
+      "sig_borrower": "9ce3210b3b1b657a9d4f33ec0c3cd8f92155952ef6d6bae1c582df762c0298ad0d6c52d7d8efa8882906aef4c0c8e5c8e641f77ba0b09c20855b075bd26a56d6",
+      "tx_hex": "02000000000101f3f45bc999ab6484d45798e1c8ba926a81a6323b5035b6088ccc46fa10c8e7ff0000000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f000000000022512011c3194cb67847eef5f83e7d4816b1b788e4e556a13e00cbe9e27a175f5543e600000000",
+      "input_amount": 0.0111,
+      "escrow_address_script": "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
+      "tapleaf_script_hex": "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
+      "escrow_is_odd": false
+    },
+    "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa"
+  }' | jq
+```
+
+**Example Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "is_valid": true,
+    "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+    "message": "Signature is valid"
+  },
+  "error": null,
+  "message": "Signature verification completed successfully"
+}
+```
+
 ### 2. Make it Readable
 Pipe the response through `jq` for pretty formatting:
 ```bash

@@ -16,6 +16,7 @@ from bitcoinutils.keys import PublicKey
 from bitcoinutils.transactions import TxWitnessInput
 from bitcoinutils.utils import ControlBlock
 from bitcoinutils.utils import to_satoshis
+from bitcoinutils.schnorr import schnorr_verify
 
 from vaultero.utils import (
     get_nums_p2tr_addr_0, 
@@ -192,6 +193,68 @@ def _complete_lender_witness(test_keys, test_data, bitcoin_setup, signature_file
     return txid  # Helper functions can return values
 
 
+def _verify_borrower_signature(signature_data, borrower_pubkey):
+    """
+    Verify the validity of the borrower's signature using bitcoinutils.
+    
+    Args:
+        signature_data: Dictionary containing signature and transaction data
+        borrower_pubkey: The borrower's public key (PublicKey object)
+    
+    Returns:
+        bool: True if signature is valid, False otherwise
+    """
+    from bitcoinutils.transactions import Transaction
+    
+    try:
+        # Reconstruct the transaction from hex
+        tx = Transaction.from_raw(signature_data['tx_hex'])
+        
+        # Get the tapleaf script
+        tapleaf_script_hex = signature_data['tapleaf_script_hex']
+        from bitcoinutils.script import Script
+        tapleaf_script = Script.from_raw(tapleaf_script_hex)
+        
+        # Get the escrow address script
+        escrow_script_hex = signature_data['escrow_address_script']
+        escrow_script = Script.from_raw(escrow_script_hex)
+        
+        # Compute the transaction digest using get_transaction_taproot_digest
+        # This is the message that was signed
+        # Use ext_flag=1 for script_path=True (same as original signing)
+        digest = tx.get_transaction_taproot_digest(
+            0,  # input index
+            [escrow_script],  # script_pubkeys
+            [to_satoshis(signature_data['input_amount'])],  # amounts
+            ext_flag=1,  # ext_flag=1 for script_path=True
+            script=tapleaf_script  # the tapleaf script
+        )
+        
+        # Get the signature and convert from hex string to bytes
+        sig_borrower_hex = signature_data['sig_borrower']
+        sig_borrower = bytes.fromhex(sig_borrower_hex)
+        
+        # Verify the signature using schnorr_verify
+        # Use x-only public key (32 bytes) for schnorr verification
+        x_only_pubkey = bytes.fromhex(borrower_pubkey.to_x_only_hex())
+        is_valid = schnorr_verify(
+            digest,  # message digest
+            x_only_pubkey,  # x-only public key bytes (32 bytes)
+            sig_borrower  # signature bytes (64 bytes)
+        )
+        
+        print(f"🔍 Signature verification result: {'✅ VALID' if is_valid else '❌ INVALID'}")
+        print(f"📊 Digest: {digest.hex()[:32]}...")
+        print(f"🔑 Public key: {borrower_pubkey.to_hex()[:32]}...")
+        print(f"✍️  Signature: {sig_borrower[:32]}...")
+        
+        return is_valid
+        
+    except Exception as e:
+        print(f"❌ Error during signature verification: {e}")
+        return False
+
+
 def test_complete_separate_signature_workflow(test_keys, test_data, bitcoin_setup):
     """
     Complete workflow test that demonstrates the entire separate signature process.
@@ -255,3 +318,28 @@ def test_lender_witness_completion(test_keys, test_data, bitcoin_setup):
     # Verify transaction was broadcast successfully
     assert txid is not None
     assert len(txid) == 64
+
+
+def test_borrower_signature_verification(test_keys, test_data, bitcoin_setup):
+    """Test that we can verify the borrower's signature using bitcoinutils."""
+    print("\n" + "="*60)
+    print("🔍 TESTING BORROWER SIGNATURE VERIFICATION")
+    print("="*60)
+    
+    # First generate borrower signature
+    signature_file_path = _generate_borrower_signature(test_keys, test_data, bitcoin_setup)
+    
+    # Load the signature data
+    with open(signature_file_path, 'r') as f:
+        signature_data = json.load(f)
+    
+    print(f"📄 Loaded signature data from: {signature_file_path}")
+    
+    # Verify the signature
+    is_valid = _verify_borrower_signature(signature_data, test_keys['borrower_pub'])
+    
+    # Assert that the signature is valid
+    assert is_valid, "Borrower signature should be valid"
+    
+    print("✅ Signature verification test passed!")
+    print("🎉 Borrower signature verification workflow completed!")
