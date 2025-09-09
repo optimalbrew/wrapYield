@@ -8,6 +8,26 @@ import { ACCOUNTS, CONTRACT_CONFIG, BTC_PUBKEY_PLACEHOLDER, NETWORK_CONFIG } fro
 import Link from 'next/link'
 import { useWalletValidation } from '@/hooks/useWalletValidation'
 import { switchToAnvil } from '@/utils/networkUtils'
+import SignatureVerification from '@/components/SignatureVerification'
+import { SignatureData } from '@/utils/signatureVerification'
+
+// Loan status enum mapping
+const LOAN_STATUS_MAP = {
+  0: 'Requested',
+  1: 'Offered', 
+  2: 'Active',
+  3: 'RefundedToLender',
+  4: 'RepaymentInProgress',
+  5: 'Repaid',
+  6: 'Defaulted'
+} as const
+
+// Helper function to get status display
+const getLoanStatusDisplay = (status: number | bigint | undefined): string => {
+  if (status === undefined || status === null) return 'N/A'
+  const statusNum = typeof status === 'bigint' ? Number(status) : status
+  return LOAN_STATUS_MAP[statusNum as keyof typeof LOAN_STATUS_MAP] || `Unknown (${statusNum})`
+}
 
 export default function BorrowerPage() {
   const { validateWalletAndContracts, account } = useWalletValidation()
@@ -288,18 +308,22 @@ export default function BorrowerPage() {
       setSelectedLoanId(latestLoanId)
     }
   }, [totalLoans])
-  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8')
+  const [borrowerBtcPubkey, setBorrowerBtcPubkey] = useState('274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa')
   const [btcAddress, setBtcAddress] = useState('bcrt1p8zquc6fyga5uldc2j3k2wscpnw44xgjuf8tpqt3ekt85vw2gqtdqlkaujg')
   const [preimageHashBorrower, setPreimageHashBorrower] = useState<string>('0x114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927')
   const [preimageHashLender, setPreimageHashLender] = useState<`0x${string}`>('0x646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3')
   const [preimageBorrower, setPreimageBorrower] = useState<`0x${string}`>('0x0e0ed04e19fa04ec6b29e6ccfd6f7384a22e1a92b81563064d8c74f354d41f05')
   const [txidP2tr0, setTxidP2tr0] = useState<string>('0xef71afe3b2f77a78c44843db2f0ab151b8fb0c298403e3634869ab65b8f677a4')
   const [voutP2tr0, setVoutP2tr0] = useState('0')
+  
+  // Signature verification state
+  const [signatureData, setSignatureData] = useState<SignatureData | undefined>(undefined)
+  const [showSignatureVerification, setShowSignatureVerification] = useState(false)
 
   // Prepare Collateral state
   const [prepareCollateralData, setPrepareCollateralData] = useState({
     loanAmount: '0.01',
-    btcPubkey: '64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8',
+    btcPubkey: '274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa',
     preimageHash: '0x114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927'
   })
   const [collateralResult, setCollateralResult] = useState<any>(null)
@@ -617,7 +641,16 @@ export default function BorrowerPage() {
 
     if (!attemptRepayment) return
 
+    // Get the actual loan amount from the contract data
+    const actualLoanAmount = borrowerLoan?.amount || BigInt(0)
+    
+    if (actualLoanAmount === BigInt(0)) {
+      alert('No loan data found. Please ensure you have an active loan.')
+      return
+    }
+
     console.log('🔐 Initiating attemptRepayment transaction - waiting for wallet signature...')
+    console.log('💰 Repayment amount:', formatEther(actualLoanAmount), 'ETH')
     
     attemptRepayment({
       address: CONTRACTS.BTC_COLLATERAL_LOAN,
@@ -627,7 +660,7 @@ export default function BorrowerPage() {
         BigInt(selectedLoanId), // loanId
         preimageHashLender, // preimageHashLender
       ],
-      value: parseEther(loanAmount), // repayment amount
+      value: actualLoanAmount, // repayment amount from contract data
     })
   }
 
@@ -1114,7 +1147,7 @@ export default function BorrowerPage() {
                           <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.amount ? formatEther(BigInt(borrowerLoan.amount)) : 'N/A'} rBTC</code></div>
                           <div>Collateral: <code className="bg-green-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
                           <div>Bond Amount: <code className="bg-green-100 px-1 rounded">{borrowerLoan.bondAmount ? formatEther(BigInt(borrowerLoan.bondAmount)) : 'N/A'} rBTC</code></div>
-                          <div>Status: <code className="bg-green-100 px-1 rounded">{borrowerLoan.status || 'N/A'}</code></div>
+                          <div>Status: <code className="bg-green-100 px-1 rounded">{getLoanStatusDisplay(borrowerLoan.status)}</code></div>
                         </div>
                       </div>
                       <div>
@@ -1613,6 +1646,93 @@ export default function BorrowerPage() {
                   {withdrawLoading ? 'Withdrawing...' : 'Withdraw Repayment'}
                 </button>
               </div>
+            </div>
+
+            {/* Signature Verification */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">Signature Verification</h3>
+                <button
+                  onClick={() => setShowSignatureVerification(!showSignatureVerification)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
+                >
+                  {showSignatureVerification ? 'Hide' : 'Show'} Verification
+                </button>
+              </div>
+              
+              {showSignatureVerification && (
+                <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        // Load actual signature data from backend
+                        if (!selectedLoanId || selectedLoanId === '0') {
+                          alert('Please select a loan first')
+                          return
+                        }
+                        
+                        try {
+                          const response = await fetch(`http://localhost:3002/api/bitcoin/signatures/loan/${selectedLoanId}/borrower`)
+                          const result = await response.json()
+                          
+                          if (result.success && result.data) {
+                            setSignatureData(result.data)
+                            alert('✅ Signature loaded from backend!')
+                          } else {
+                            alert('⏳ No signature found in backend')
+                          }
+                        } catch (error) {
+                          console.error('Error loading signature:', error)
+                          alert('Error loading signature: ' + (error as Error).message)
+                        }
+                      }}
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
+                    >
+                      📋 Load My Signature
+                    </button>
+                    {processedSignature && (
+                      <button
+                        onClick={() => {
+                          // Load processed signature data from current session
+                          setSignatureData(processedSignature)
+                        }}
+                        className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors font-medium text-sm"
+                      >
+                        🔄 Load Session Data
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        // Load sample signature data for testing
+                        setSignatureData({
+                          sig_borrower: "9ce3210b3b1b657a9d4f33ec0c3cd8f92155952ef6d6bae1c582df762c0298ad0d6c52d7d8efa8882906aef4c0c8e5c8e641f77ba0b09c20855b075bd26a56d6",
+                          tx_hex: "02000000000101f3f45bc999ab6484d45798e1c8ba926a81a6323b5035b6088ccc46fa10c8e7ff0000000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f000000000022512011c3194cb67847eef5f83e7d4816b1b788e4e556a13e00cbe9e27a175f5543e600000000",
+                          input_amount: 0.0111,
+                          escrow_address_script: "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
+                          tapleaf_script_hex: "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
+                          escrow_is_odd: false
+                        })
+                      }}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
+                    >
+                      🧪 Load Test Data
+                    </button>
+                    <button
+                      onClick={() => setSignatureData(undefined)}
+                      className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
+                    >
+                      🗑️ Clear Data
+                    </button>
+                  </div>
+                  <SignatureVerification
+                    signatureData={signatureData}
+                    borrowerPubkey={borrowerBtcPubkey}
+                    onVerificationResult={(isValid, result) => {
+                      console.log('Signature verification result:', { isValid, result })
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Loan Information */}

@@ -27,7 +27,7 @@ export const loanStatuses = [
 // Loans table - main loan tracking
 export const loans = pgTable('loans', {
   id: uuid('id').primaryKey().defaultRandom(),
-  evmContractId: varchar('evm_contract_id', { length: 50 }), // Loan ID from smart contract (stored as string)
+  evmContractId: varchar('evm_contract_id', { length: 50 }).unique(), // Loan ID from smart contract (stored as string)
   borrowerId: uuid('borrower_id').notNull().references(() => users.id),
   lenderId: uuid('lender_id').references(() => users.id),
   
@@ -42,10 +42,14 @@ export const loans = pgTable('loans', {
   status: varchar('status', { length: 30 }).notNull().default('requested'),
   
   // Bitcoin addresses and keys
-  borrowerBtcPubkey: varchar('borrower_btc_pubkey', { length: 64 }).notNull(),
-  lenderBtcPubkey: varchar('lender_btc_pubkey', { length: 64 }),
+  borrowerBtcPubkey: varchar('borrower_btc_pubkey', { length: 66 }).notNull(),
+  lenderBtcPubkey: varchar('lender_btc_pubkey', { length: 66 }),
   escrowAddress: varchar('escrow_address', { length: 63 }), // P2TR address
   collateralAddress: varchar('collateral_address', { length: 63 }),
+  
+  // Bitcoin transaction details
+  btcTxid: varchar('btc_txid', { length: 66 }), // Bitcoin transaction ID of the escrow UTXO
+  btcVout: integer('btc_vout'), // Output index of the escrow UTXO in the bitcoin transaction
   
   // Preimage hashes for HTLC
   preimageHashBorrower: varchar('preimage_hash_borrower', { length: 66 }),
@@ -71,111 +75,6 @@ export const loans = pgTable('loans', {
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 })
 
-// Bitcoin transactions table - track all Bitcoin transactions
-export const bitcoinTransactions = pgTable('bitcoin_transactions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  
-  // Transaction identifiers
-  txid: varchar('txid', { length: 64 }), // Bitcoin transaction ID
-  type: varchar('type', { length: 30 }).notNull(), // 'escrow' | 'collateral' | 'refund' | 'claim'
-  
-  // Transaction data
-  rawTx: text('raw_tx'), // Raw transaction hex
-  inputAmount: decimal('input_amount', { precision: 18, scale: 8 }),
-  outputAmount: decimal('output_amount', { precision: 18, scale: 8 }),
-  fee: decimal('fee', { precision: 18, scale: 8 }),
-  
-  // Status tracking
-  status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending' | 'broadcast' | 'confirmed' | 'failed'
-  confirmations: integer('confirmations').default(0),
-  blockHeight: integer('block_height'),
-  
-  // Metadata
-  metadata: jsonb('metadata'), // Additional transaction-specific data
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull()
-})
-
-// Signatures table - store Bitcoin transaction signatures for separate signing workflow
-export const signatures = pgTable('signatures', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  bitcoinTxId: uuid('bitcoin_tx_id').references(() => bitcoinTransactions.id),
-  
-  // Signature details
-  signedBy: uuid('signed_by').notNull().references(() => users.id), // Who created this signature
-  signatureType: varchar('signature_type', { length: 20 }).notNull(), // 'borrower' | 'lender'
-  signatureData: text('signature_data').notNull(), // The actual signature hex
-  
-  // Transaction context (needed to reconstruct witness)
-  transactionHex: text('transaction_hex').notNull(), // Raw transaction being signed
-  inputAmount: decimal('input_amount', { precision: 18, scale: 8 }).notNull(),
-  scriptPath: boolean('script_path').default(true), // Taproot script path vs key path
-  leafIndex: integer('leaf_index'), // Which leaf in the Merkle tree
-  tapleafScript: text('tapleaf_script'), // Script being executed
-  controlBlock: text('control_block'), // Taproot control block
-  
-  // Additional context for witness construction
-  witnessContext: jsonb('witness_context'), // Additional data needed to complete witness
-  
-  // Status and lifecycle
-  status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending' | 'used' | 'expired'
-  expiresAt: timestamp('expires_at'), // When this signature expires
-  usedAt: timestamp('used_at'), // When this signature was used in a transaction
-  
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull()
-})
-
-// EVM transactions table - track EVM contract interactions
-export const evmTransactions = pgTable('evm_transactions', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  
-  // Transaction identifiers
-  txHash: varchar('tx_hash', { length: 66 }).notNull(), // 0x prefixed hash
-  contractAddress: varchar('contract_address', { length: 42 }).notNull(),
-  functionName: varchar('function_name', { length: 100 }), // Contract function called
-  
-  // Transaction data
-  gasUsed: bigint('gas_used', { mode: 'bigint' }),
-  gasPrice: bigint('gas_price', { mode: 'bigint' }),
-  value: decimal('value', { precision: 18, scale: 18 }), // ETH value sent
-  
-  // Status tracking
-  status: varchar('status', { length: 20 }).notNull().default('pending'), // 'pending' | 'confirmed' | 'failed'
-  blockNumber: bigint('block_number', { mode: 'bigint' }),
-  confirmations: integer('confirmations').default(0),
-  
-  // Event data
-  eventData: jsonb('event_data'), // Parsed contract events from this transaction
-  
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull()
-})
-
-// Loan events table - audit trail of all loan state changes
-export const loanEvents = pgTable('loan_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  
-  // Event details
-  eventType: varchar('event_type', { length: 50 }).notNull(), // 'status_change' | 'signature_created' | 'transaction_broadcast' etc.
-  fromStatus: varchar('from_status', { length: 30 }),
-  toStatus: varchar('to_status', { length: 30 }),
-  
-  // Actor and context
-  triggeredBy: uuid('triggered_by').references(() => users.id),
-  relatedTxId: uuid('related_tx_id'), // Could be Bitcoin or EVM transaction
-  
-  // Event data
-  eventData: jsonb('event_data'), // Detailed event information
-  notes: text('notes'), // Human-readable description
-  
-  createdAt: timestamp('created_at').defaultNow().notNull()
-})
-
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users)
 export const selectUserSchema = createSelectSchema(users)
@@ -186,91 +85,6 @@ export const insertLoanSchema = createInsertSchema(loans)
 export const selectLoanSchema = createSelectSchema(loans)
 export type Loan = z.infer<typeof selectLoanSchema>
 export type NewLoan = z.infer<typeof insertLoanSchema>
-
-export const insertSignatureSchema = createInsertSchema(signatures)
-export const selectSignatureSchema = createSelectSchema(signatures)
-export type Signature = z.infer<typeof selectSignatureSchema>
-export type NewSignature = z.infer<typeof insertSignatureSchema>
-
-export const insertBitcoinTransactionSchema = createInsertSchema(bitcoinTransactions)
-export const selectBitcoinTransactionSchema = createSelectSchema(bitcoinTransactions)
-export type BitcoinTransaction = z.infer<typeof selectBitcoinTransactionSchema>
-export type NewBitcoinTransaction = z.infer<typeof insertBitcoinTransactionSchema>
-
-export const insertEvmTransactionSchema = createInsertSchema(evmTransactions)
-export const selectEvmTransactionSchema = createSelectSchema(evmTransactions)
-export type EvmTransaction = z.infer<typeof selectEvmTransactionSchema>
-export type NewEvmTransaction = z.infer<typeof insertEvmTransactionSchema>
-
-export const insertLoanEventSchema = createInsertSchema(loanEvents)
-export const selectLoanEventSchema = createSelectSchema(loanEvents)
-export type LoanEvent = z.infer<typeof selectLoanEventSchema>
-export type NewLoanEvent = z.infer<typeof insertLoanEventSchema>
-
-// EVM Events table
-export const evmEvents = pgTable('evm_events', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  contractAddress: varchar('contract_address', { length: 42 }).notNull(),
-  eventName: varchar('event_name', { length: 100 }).notNull(),
-  eventData: jsonb('event_data').notNull(),
-  blockNumber: bigint('block_number', { mode: 'bigint' }).notNull(),
-  transactionHash: varchar('transaction_hash', { length: 66 }).notNull(),
-  logIndex: integer('log_index').notNull(),
-  processed: boolean('processed').default(false).notNull(),
-  processingStatus: varchar('processing_status', { length: 50 }).default('pending'),
-  processedAt: timestamp('processed_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull()
-})
-
-export const insertEvmEventSchema = createInsertSchema(evmEvents)
-export const selectEvmEventSchema = createSelectSchema(evmEvents)
-export type EvmEvent = z.infer<typeof selectEvmEventSchema>
-export type NewEvmEvent = z.infer<typeof insertEvmEventSchema>
-
-// Loan Workflows table
-export const loanWorkflows = pgTable('loan_workflows', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  loanId: uuid('loan_id').notNull().references(() => loans.id),
-  workflowType: varchar('workflow_type', { length: 100 }).notNull(),
-  currentStep: varchar('current_step', { length: 100 }).notNull(),
-  status: varchar('status', { length: 50 }).notNull().default('pending'),
-  stepData: jsonb('step_data'),
-  errorMessage: text('error_message'),
-  retryCount: integer('retry_count').default(0).notNull(),
-  maxRetries: integer('max_retries').default(3).notNull(),
-  nextRetryAt: timestamp('next_retry_at'),
-  completedAt: timestamp('completed_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull()
-})
-
-export const insertLoanWorkflowSchema = createInsertSchema(loanWorkflows)
-export const selectLoanWorkflowSchema = createSelectSchema(loanWorkflows)
-export type LoanWorkflow = z.infer<typeof selectLoanWorkflowSchema>
-export type NewLoanWorkflow = z.infer<typeof insertLoanWorkflowSchema>
-
-// Alerts table
-export const alerts = pgTable('alerts', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: varchar('name', { length: 200 }).notNull(),
-  severity: varchar('severity', { length: 20 }).notNull(),
-  message: text('message').notNull(),
-  condition: text('condition').notNull(),
-  threshold: decimal('threshold').notNull(),
-  value: decimal('value'),
-  metadata: jsonb('metadata'),
-  triggered: boolean('triggered').default(false).notNull(),
-  triggeredAt: timestamp('triggered_at'),
-  resolvedAt: timestamp('resolved_at'),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().notNull()
-})
-
-export const insertAlertSchema = createInsertSchema(alerts)
-export const selectAlertSchema = createSelectSchema(alerts)
-export type Alert = z.infer<typeof selectAlertSchema>
-export type NewAlert = z.infer<typeof insertAlertSchema>
 
 // Simple borrower signatures table - just what we need
 export const borrowerSignatures = pgTable('borrower_signatures', {

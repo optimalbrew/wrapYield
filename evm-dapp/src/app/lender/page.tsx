@@ -8,6 +8,26 @@ import { CONTRACT_CONFIG, NETWORK_CONFIG, BTC_PUBKEY_PLACEHOLDER } from '@/const
 import Link from 'next/link'
 import { useWalletValidation } from '@/hooks/useWalletValidation'
 import { switchToAnvil } from '@/utils/networkUtils'
+import SignatureVerification from '@/components/SignatureVerification'
+import { SignatureData } from '@/utils/signatureVerification'
+
+// Loan status enum mapping
+const LOAN_STATUS_MAP = {
+  0: 'Requested',
+  1: 'Offered', 
+  2: 'Active',
+  3: 'RefundedToLender',
+  4: 'RepaymentInProgress',
+  5: 'Repaid',
+  6: 'Defaulted'
+} as const
+
+// Helper function to get status display
+const getLoanStatusDisplay = (status: number | bigint | undefined): string => {
+  if (status === undefined || status === null) return 'N/A'
+  const statusNum = typeof status === 'bigint' ? Number(status) : status
+  return LOAN_STATUS_MAP[statusNum as keyof typeof LOAN_STATUS_MAP] || `Unknown (${statusNum})`
+}
 
 export default function LenderPage() {
   // Helper function to safely serialize loan details
@@ -158,6 +178,10 @@ export default function LenderPage() {
   const [newTimelockBtcEscrow, setNewTimelockBtcEscrow] = useState(CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW.toString())
   const [newTimelockRepaymentAccept, setNewTimelockRepaymentAccept] = useState(CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT.toString())
   const [newTimelockBtcCollateral, setNewTimelockBtcCollateral] = useState(CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL.toString())
+  
+  // Signature verification state
+  const [signatureData, setSignatureData] = useState<SignatureData | undefined>(undefined)
+  const [showSignatureVerification, setShowSignatureVerification] = useState(false)
 
   // Get loan details for bond calculation
   const { data: loanDetails, refetch: refetchLoanDetails } = useReadContract({
@@ -993,7 +1017,7 @@ export default function LenderPage() {
                             <div>Loan Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.amount ? formatEther(BigInt(loanDetails.amount)) : 'N/A'} rBTC</code></div>
                             <div>Collateral Amount: <code className="bg-blue-100 px-1 rounded">N/A (Set when collateral provided)</code></div>
                             <div>Bond Amount: <code className="bg-blue-100 px-1 rounded">{loanDetails.bondAmount ? formatEther(BigInt(loanDetails.bondAmount)) : 'N/A'} rBTC</code></div>
-                            <div>Status: <code className="bg-blue-100 px-1 rounded">{loanDetails.status || 'N/A'}</code></div>
+                            <div>Status: <code className="bg-blue-100 px-1 rounded">{getLoanStatusDisplay(loanDetails.status)}</code></div>
                           </div>
                         </div>
                         <div>
@@ -1215,6 +1239,77 @@ export default function LenderPage() {
             </div>
           </div>
         )}
+
+        {/* Signature Verification */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold text-gray-800">Signature Verification</h3>
+            <button
+              onClick={() => setShowSignatureVerification(!showSignatureVerification)}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
+            >
+              {showSignatureVerification ? 'Hide' : 'Show'} Verification
+            </button>
+          </div>
+          
+          {showSignatureVerification && (
+            <div className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                {borrowerSignature && (
+                  <button
+                    onClick={() => {
+                      // Debug: Log the actual borrowerSignature structure
+                      console.log('🔍 borrowerSignature structure:', borrowerSignature)
+                      console.log('🔍 Available fields:', Object.keys(borrowerSignature))
+                      
+                      // Load actual borrower signature data
+                      setSignatureData({
+                        sig_borrower: borrowerSignature.sig_borrower,
+                        tx_hex: borrowerSignature.tx_hex || borrowerSignature.txid,
+                        input_amount: borrowerSignature.input_amount,
+                        escrow_address_script: borrowerSignature.escrow_address_script,
+                        tapleaf_script_hex: borrowerSignature.tapleaf_script_hex,
+                        escrow_is_odd: borrowerSignature.escrow_is_odd
+                      })
+                    }}
+                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
+                  >
+                    📋 Load Borrower Signature
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    // Load sample signature data for testing
+                    setSignatureData({
+                      sig_borrower: "9ce3210b3b1b657a9d4f33ec0c3cd8f92155952ef6d6bae1c582df762c0298ad0d6c52d7d8efa8882906aef4c0c8e5c8e641f77ba0b09c20855b075bd26a56d6",
+                      tx_hex: "02000000000101f3f45bc999ab6484d45798e1c8ba926a81a6323b5035b6088ccc46fa10c8e7ff0000000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f000000000022512011c3194cb67847eef5f83e7d4816b1b788e4e556a13e00cbe9e27a175f5543e600000000",
+                      input_amount: 0.0111,
+                      escrow_address_script: "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
+                      tapleaf_script_hex: "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
+                      escrow_is_odd: false
+                    })
+                  }}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
+                >
+                  🧪 Load Sample Data
+                </button>
+                <button
+                  onClick={() => setSignatureData(undefined)}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
+                >
+                  🗑️ Clear Data
+                </button>
+              </div>
+              <SignatureVerification
+                signatureData={signatureData}
+                borrowerPubkey="274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa"
+                onVerificationResult={(isValid, result) => {
+                  console.log('Signature verification result:', { isValid, result })
+                }}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Transaction Status Display */}
         <div className="bg-white rounded-xl shadow-lg p-6 mt-8">

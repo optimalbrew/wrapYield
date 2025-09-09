@@ -389,12 +389,17 @@ class EVMEventMonitor {
         if (existingUser.length > 0) {
           // Update existing user to lender role
           await db.update(users)
-            .set({ role: 'lender', updatedAt: new Date() })
+            .set({ 
+              role: 'lender', 
+              btcPubkey: btcPubkey,
+              updatedAt: new Date() 
+            })
             .where(eq(users.id, existingUser[0].id))
         } else {
           // Create new lender user
           await db.insert(users).values({
             evmAddress: lenderAddress,
+            btcPubkey: btcPubkey,
             role: 'lender',
             createdAt: new Date(),
             updatedAt: new Date()
@@ -433,16 +438,18 @@ class EVMEventMonitor {
       
       const loanData = await contract.getLoan(loanId)
       console.log(`📋 Complete loan data from contract:`)
-      console.log(`   Borrower BTC Pubkey: ${loanData.borrowerBtcPubkey}`)
-      console.log(`   Preimage Hash Borrower: ${loanData.preimageHashBorrower}`)
-      console.log(`   TXID P2TR0: ${loanData.txid_p2tr0}`)
-      console.log(`   VOUT P2TR0: ${loanData.vout_p2tr0}`)
-      console.log(`   Status: ${loanData.status}`)
-      console.log(`   Bond Amount: ${loanData.bondAmount}`)
-      console.log(`   Preimage Hash Lender: ${loanData.preimageHashLender}`)
-      console.log(`   Offer Block Height: ${loanData.offerBlockheight}`)
-      console.log(`   Activation Block Height: ${loanData.activationBlockheight}`)
-      console.log(`   Repayment Block Height: ${loanData.repaymentBlockheight}`)
+      console.log(`   Borrower Address: ${loanData[0]}`)
+      console.log(`   Borrower BTC Pubkey: ${loanData[1]}`)
+      console.log(`   Amount: ${loanData[2]}`)
+      console.log(`   Bond Amount: ${loanData[3]}`)
+      console.log(`   Status: ${loanData[4]}`)
+      console.log(`   Preimage Hash Borrower: ${loanData[5]}`)
+      console.log(`   Preimage Hash Lender: ${loanData[6]}`)
+      console.log(`   TXID P2TR0: ${loanData[7]}`)
+      console.log(`   VOUT P2TR0: ${loanData[8]}`)
+      console.log(`   Offer Block Height: ${loanData[9]}`)
+      console.log(`   Activation Block Height: ${loanData[10]}`)
+      console.log(`   Repayment Block Height: ${loanData[11]}`)
 
       // Store in database
       const db = databaseService.getDatabase()
@@ -458,6 +465,7 @@ class EVMEventMonitor {
             // Create new user
             const newUser = await db.insert(users).values({
               evmAddress: borrowerAddress,
+              btcPubkey: loanData[1], // borrowerBtcPubkey
               role: 'borrower',
               createdAt: new Date(),
               updatedAt: new Date()
@@ -469,6 +477,14 @@ class EVMEventMonitor {
           return
         }
 
+        // Check if loan already exists to prevent duplicates
+        const existingLoan = await db.select().from(loans).where(eq(loans.evmContractId, loanId.toString())).limit(1)
+        
+        if (existingLoan.length > 0) {
+          console.log(`⚠️  Loan ${loanId} already exists, skipping insertion`)
+          return
+        }
+
         // Insert loan record with complete data from contract
         await db.insert(loans).values({
           evmContractId: loanId.toString(),
@@ -476,20 +492,20 @@ class EVMEventMonitor {
           amount: amount,
           durationBlocks: 100, // Default duration
           status: 'requested',
-          borrowerBtcPubkey: loanData.borrowerBtcPubkey,
-          preimageHashBorrower: loanData.preimageHashBorrower,
-          btcTxid: loanData.txid_p2tr0,
-          btcVout: Number(loanData.vout_p2tr0),
+          borrowerBtcPubkey: loanData[1], // borrowerBtcPubkey
+          preimageHashBorrower: loanData[5], // preimageHashBorrower
+          btcTxid: loanData[7], // txid_p2tr0
+          btcVout: Number(loanData[8]), // vout_p2tr0
           btcAddress: btcAddress,
-          preimageHashLender: loanData.preimageHashLender,
+          preimageHashLender: loanData[6], // preimageHashLender
           timelockLoanReq: 100,
           timelockBtcEscrow: 100,
           timelockRepaymentAccept: 100,
           timelockBtcCollateral: 100,
           requestBlockHeight: event.blockNumber,
-          offerBlockHeight: loanData.offerBlockheight ? Number(loanData.offerBlockheight) : null,
-          activationBlockHeight: loanData.activationBlockheight ? Number(loanData.activationBlockheight) : null,
-          repaymentBlockHeight: loanData.repaymentBlockheight ? Number(loanData.repaymentBlockheight) : null,
+          offerBlockHeight: loanData[9] ? Number(loanData[9]) : null, // offerBlockheight
+          activationBlockHeight: loanData[10] ? Number(loanData[10]) : null, // activationBlockheight
+          repaymentBlockHeight: loanData[11] ? Number(loanData[11]) : null, // repaymentBlockheight
           createdAt: new Date(),
           updatedAt: new Date()
         })
@@ -844,14 +860,14 @@ class EVMEventMonitor {
           // Update database with complete loan data
           await db.update(loans)
             .set({
-              borrowerBtcPubkey: loanData.borrowerBtcPubkey,
-              preimageHashBorrower: loanData.preimageHashBorrower,
-              btcTxid: loanData.txid_p2tr0,
-              btcVout: Number(loanData.vout_p2tr0),
-              preimageHashLender: loanData.preimageHashLender,
-              offerBlockHeight: loanData.offerBlockheight ? Number(loanData.offerBlockheight) : null,
-              activationBlockHeight: loanData.activationBlockheight ? Number(loanData.activationBlockheight) : null,
-              repaymentBlockHeight: loanData.repaymentBlockheight ? Number(loanData.repaymentBlockheight) : null,
+              borrowerBtcPubkey: loanData[1], // borrowerBtcPubkey
+              preimageHashBorrower: loanData[5], // preimageHashBorrower
+              btcTxid: loanData[7], // txid_p2tr0
+              btcVout: Number(loanData[8]), // vout_p2tr0
+              preimageHashLender: loanData[6], // preimageHashLender
+              offerBlockHeight: loanData[9] ? Number(loanData[9]) : null, // offerBlockheight
+              activationBlockHeight: loanData[10] ? Number(loanData[10]) : null, // activationBlockheight
+              repaymentBlockHeight: loanData[11] ? Number(loanData[11]) : null, // repaymentBlockheight
               updatedAt: new Date()
             })
             .where(eq(loans.evmContractId, i.toString()))

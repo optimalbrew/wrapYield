@@ -6,8 +6,6 @@ import databaseService from './services/databaseService'
 import evmEventMonitor from './services/evmEventMonitor'
 
 // Import API routes
-import signaturesRouter from './api/signatures'
-import bitcoinTransactionsRouter from './api/bitcoin-transactions'
 import bitcoinSignaturesRouter from './api/bitcoinSignatures'
 import prepareCollateralRouter from './api/prepare-collateral'
 
@@ -86,8 +84,6 @@ app.get('/api/sync/status', (req, res) => {
 })
 
 // API routes
-app.use('/api/signatures', signaturesRouter)
-app.use('/api/bitcoin-transactions', bitcoinTransactionsRouter)
 app.use('/api/bitcoin/signatures', bitcoinSignaturesRouter)
 app.use('/api/prepare-collateral', prepareCollateralRouter)
 
@@ -99,8 +95,6 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       syncStatus: '/api/sync/status',
-      signatures: '/api/signatures',
-      bitcoinTransactions: '/api/bitcoin-transactions',
       bitcoinSignatures: '/api/bitcoin/signatures',
       prepareCollateral: '/api/prepare-collateral'
     },
@@ -147,7 +141,8 @@ async function startServer() {
   try {
     console.log('🚀 Starting BTC Yield Backend Service...')
     
-    // Database is already initialized in the service constructor
+    // Wait for database initialization to complete
+    await databaseService.waitForInitialization()
     console.log('✅ Database service initialized')
     
     // Start EVM event monitoring
@@ -159,20 +154,11 @@ async function startServer() {
       console.log(`\n✅ Server running on port ${PORT}`)
       console.log(`🌐 API available at: http://localhost:${PORT}`)
       console.log(`💊 Health check: http://localhost:${PORT}/health`)
-      console.log(`📋 Signatures API: http://localhost:${PORT}/api/signatures`)
-      console.log(`₿ Bitcoin Transactions API: http://localhost:${PORT}/api/bitcoin-transactions`)
       console.log(`📁 Bitcoin Signatures API: http://localhost:${PORT}/api/bitcoin/signatures`)
       console.log(`\n📚 Available endpoints:`)
       console.log(`  GET  /health - Service health check`)
       console.log(`  GET  /api/sync/status - Sync status and last sync time`)
       console.log(`  GET  / - API information`)
-      console.log(`  POST /api/signatures - Create signature`)
-      console.log(`  GET  /api/signatures/:id - Get signature`)
-      console.log(`  POST /api/signatures/:id/export - Export signature to JSON`)
-      console.log(`  POST /api/signatures/complete-witness - Complete witness`)
-      console.log(`  POST /api/bitcoin-transactions/escrow - Create escrow transaction`)
-      console.log(`  POST /api/bitcoin-transactions/collateral - Create collateral transaction`)
-      console.log(`  POST /api/bitcoin-transactions/:id/broadcast - Broadcast transaction`)
     })
     
   } catch (error) {

@@ -1,13 +1,15 @@
 import { drizzle } from 'drizzle-orm/postgres-js'
+import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import postgres from 'postgres'
 import * as schema from '../db/schema'
 
 class DatabaseService {
   private db: any
   private client: any
+  private initialized: Promise<void>
 
   constructor() {
-    this.initializeDatabase()
+    this.initialized = this.initializeDatabase()
   }
 
   private async initializeDatabase() {
@@ -30,72 +32,20 @@ class DatabaseService {
 
   private async initializeTables() {
     try {
-      // Create tables using raw SQL for now
-      const createTablesSQL = `
-        -- Users table
-        CREATE TABLE IF NOT EXISTS users (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          evm_address VARCHAR(42) NOT NULL UNIQUE,
-          btc_pubkey VARCHAR(64),
-          role VARCHAR(20) NOT NULL DEFAULT 'borrower',
-          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-          updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-        );
-
-        -- Loans table
-        CREATE TABLE IF NOT EXISTS loans (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          evm_contract_id VARCHAR(50),
-          borrower_id UUID NOT NULL,
-          lender_id UUID,
-          amount NUMERIC(78,0) NOT NULL,
-          collateral_amount NUMERIC(78,0),
-          bond_amount NUMERIC(78,0),
-          interest_rate NUMERIC(5,2),
-          duration_blocks INTEGER NOT NULL,
-          status VARCHAR(30) NOT NULL DEFAULT 'requested',
-          btc_txid VARCHAR(64),
-          btc_vout INTEGER,
-          btc_address VARCHAR(100),
-          btc_pubkey VARCHAR(64),
-          preimage_hash_borrower VARCHAR(66),
-          preimage_borrower VARCHAR(66),
-          preimage_lender VARCHAR(66),
-          request_block_height NUMERIC(20,0),
-          offer_block_height NUMERIC(20,0),
-          activation_block_height NUMERIC(20,0),
-          repayment_block_height NUMERIC(20,0),
-          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-          updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-        );
-
-        -- Signatures table
-        CREATE TABLE IF NOT EXISTS signatures (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          loan_id UUID REFERENCES loans(id),
-          signature_type VARCHAR(50) NOT NULL,
-          signature_data JSONB NOT NULL,
-          status VARCHAR(50) NOT NULL DEFAULT 'pending',
-          created_at TIMESTAMP DEFAULT NOW() NOT NULL,
-          updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-        );
-
-        -- Simple borrower signatures table
-        CREATE TABLE IF NOT EXISTS borrower_signatures (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          loan_id VARCHAR(50) NOT NULL,
-          signature_data JSONB NOT NULL,
-          created_at TIMESTAMP DEFAULT NOW() NOT NULL
-        );
-      `
-
-      await this.client.unsafe(createTablesSQL)
-      console.log('✅ Database tables initialized')
+      // Use Drizzle's migration system to create tables from schema
+      await migrate(this.db, { migrationsFolder: './drizzle' })
+      console.log('✅ Database tables initialized using Drizzle migrations')
       
     } catch (error) {
       console.error('❌ Database table initialization failed:', error)
+      console.error('❌ Migrations folder not found or migration failed. Please ensure migrations are generated.')
       throw error
     }
+  }
+
+
+  async waitForInitialization() {
+    await this.initialized
   }
 
   getDatabase() {

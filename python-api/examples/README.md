@@ -4,6 +4,12 @@ This directory contains example API responses and usage examples for the BTC Yie
 
 ## Examples
 
+What is available
+```bash
+curl -s http://localhost:8002/openapi.json | jq '.paths | keys' | head -20
+```
+
+
 ### Leaf Scripts Output 0
 
 **File**: `leaf-scripts-output-0-response.json`
@@ -66,8 +72,8 @@ localhost:8002 for borrower python-api
 curl -X POST http://localhost:8002/bitcoin/fund-address \
   -H "Content-Type: application/json" \
   -d '{
-    "address": "bcrt1p8zquc6fyga5uldc2j3k2wscpnw44xgjuf8tpqt3ekt85vw2gqtdqlkaujg",
-    "amount": 0.001,
+    "address": "bcrt1ph0445r4yg6jh6wcflqna3qwtk4jc83xqal80jnyt9tz4gwzdnrcsv0ysqn",
+    "amount": 0.010102,
     "label": "test-funding"
   }'
 ```
@@ -216,6 +222,68 @@ curl -X POST "http://localhost:8001/transactions/collateral" \
     "collateral_amount": "0.001",
     "origination_fee": "0.0001"
   }'
+```
+
+### Borrower signature generation
+
+**Endpoint**: `POST /transactions/borrower-signature`
+
+**Description**: Generate borrower's signature for collateral transaction and save to JSON file. This endpoint allows the borrower to sign the collateral transaction offline and save their signature to a JSON file that can be shared with the lender.
+
+**Usage**:
+```bash
+curl -X POST "http://localhost:8002/transactions/borrower-signature" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "loan_id": "test-loan-example-456",
+    "escrow_txid": "d6f954878b9ef4b8dc9c21dae1f093e3f2d01b4388f2af6c666f5c1c10eae051",
+    "escrow_vout": 1,
+    "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+    "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+    "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+    "preimage_hash_lender": "646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3",
+    "borrower_timelock": 100,
+    "lender_timelock": 144,
+    "collateral_amount": "0.01",
+    "origination_fee": "0.001",
+    "borrower_private_key": "cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz"
+  }' | jq
+```
+
+**Example Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "signature_file_path": "/app/examples/borrower_signature_test-loan-example-456.json",
+    "loan_id": "test-loan-example-456",
+    "message": "Borrower signature saved to file"
+  },
+  "error": null,
+  "message": "Borrower signature generated and saved successfully"
+}
+```
+
+**Generated Signature File Content**:
+```json
+{
+  "sig_borrower": "609949b34f2a68d87acbee29dfacf1a9d455f7f4595f120a5ade3e901c9ba76c1256445c6a6dd06729eccbe730ec3555865abdcbea0071fd14afe192c8b07d82",
+  "txid": "d6f954878b9ef4b8dc9c21dae1f093e3f2d01b4388f2af6c666f5c1c10eae051",
+  "vout": 1,
+  "tx_hex": "0200000000010151e0ea101c5c6f666caff288431bd0f2e393f0e1da219cdcb8f49e8b8754f9d60100000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f0000000000225120ebd5034917da3723364473e1f08828523384f8ba28948f8cc9fae1569d12c66f00000000",
+  "input_amount": 0.0111,
+  "leaf_index": 1,
+  "escrow_address_script": "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
+  "tapleaf_script_hex": "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
+  "escrow_is_odd": false,
+  "loan_id": "test-loan-example-456",
+  "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+  "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+  "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+  "borrower_timelock": 100,
+  "collateral_amount": 0.01,
+  "origination_fee": 0.001
+}
 ```
 
 ### Signature Verification

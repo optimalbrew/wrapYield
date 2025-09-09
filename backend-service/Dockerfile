@@ -1,4 +1,29 @@
-# Node.js Backend Service Dockerfile
+# Multi-stage build for Node.js Backend Service
+# Stage 1: Generate migrations
+FROM node:18-alpine AS migration-builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies for migration generation)
+RUN npm install
+
+# Copy source code
+COPY . .
+
+# Build TypeScript
+RUN npm run build
+
+# Generate Drizzle migrations from schema
+RUN npm run db:generate
+
+# Verify migrations were generated
+RUN ls -la drizzle/ || echo "No drizzle directory found"
+RUN ls -la drizzle/meta/ || echo "No drizzle meta directory found"
+
+# Stage 2: Runtime image
 FROM node:18-alpine
 
 # Install curl for health checks
@@ -10,17 +35,13 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including dev dependencies for build)
-RUN npm install
+# Install production dependencies only
+RUN npm install --only=production
 
-# Copy source code
-COPY . .
-
-# Build TypeScript
-RUN npm run build
-
-# Remove dev dependencies to reduce image size
-RUN npm prune --only=production
+# Copy built application and generated migrations from previous stage
+COPY --from=migration-builder /app/dist ./dist
+COPY --from=migration-builder /app/drizzle ./drizzle
+COPY --from=migration-builder /app/contracts ./contracts
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs
