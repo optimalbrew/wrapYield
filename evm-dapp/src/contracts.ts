@@ -3,19 +3,105 @@ import type { Loan, LoanParameters } from './types'
 
 // Contract ABIs - these will be populated from the compiled contracts
 export const ETHER_SWAP_ABI = [
-  // Basic contract functions
-  'function lock(bytes32 preimageHash, address claimAddress, uint256 timelock) external payable',
-  'function lockPrepayMinerfee(bytes32 preimageHash, address payable claimAddress, uint256 timelock, uint256 prepayAmount) external payable',
-  'function claim(bytes32 preimageHash, bytes32 preimage, uint256 amount, address refundAddress, uint256 timelock, address destination) external',
-  'function refund(bytes32 preimageHash, uint256 amount, address claimAddress, uint256 timelock) external',
-  // View functions
-  'function swaps(bytes32) external view returns (bool)',
-  'function authorizedContract() external view returns (address)',
-  'function version() external view returns (uint8)',
-  // Events
-  'event Lockup(bytes32 indexed preimageHash, uint256 amount, address claimAddress, address indexed refundAddress, uint256 timelock)',
-  'event Claim(bytes32 indexed preimageHash, bytes32 preimage)',
-  'event Refund(bytes32 indexed preimageHash)',
+  {
+    "type": "function",
+    "name": "lock",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32"},
+      {"name": "claimAddress", "type": "address"},
+      {"name": "timelock", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "lockPrepayMinerfee",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32"},
+      {"name": "claimAddress", "type": "address"},
+      {"name": "timelock", "type": "uint256"},
+      {"name": "prepayAmount", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "claim",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32"},
+      {"name": "preimage", "type": "bytes32"},
+      {"name": "amount", "type": "uint256"},
+      {"name": "refundAddress", "type": "address"},
+      {"name": "timelock", "type": "uint256"},
+      {"name": "destination", "type": "address"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "refund",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32"},
+      {"name": "amount", "type": "uint256"},
+      {"name": "claimAddress", "type": "address"},
+      {"name": "timelock", "type": "uint256"}
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "swaps",
+    "inputs": [{"name": "", "type": "bytes32"}],
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "authorizedContract",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "address"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "version",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "uint8"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "Lockup",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32", "indexed": true},
+      {"name": "amount", "type": "uint256", "indexed": false},
+      {"name": "claimAddress", "type": "address", "indexed": false},
+      {"name": "refundAddress", "type": "address", "indexed": true},
+      {"name": "timelock", "type": "uint256", "indexed": false}
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Claim",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32", "indexed": true},
+      {"name": "preimage", "type": "bytes32", "indexed": false}
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Refund",
+    "inputs": [
+      {"name": "preimageHash", "type": "bytes32", "indexed": true}
+    ],
+    "anonymous": false
+  }
 ] as const
 
 export const BTC_COLLATERAL_LOAN_ABI = [
@@ -279,6 +365,13 @@ export const BTC_COLLATERAL_LOAN_ABI = [
   {
     "type": "function",
     "name": "LENDER_BOND_PERCENTAGE",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "ORIGIN_FEE_PERCENTAGE",
     "inputs": [],
     "outputs": [{"name": "", "type": "uint256"}],
     "stateMutability": "view"

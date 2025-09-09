@@ -1,5 +1,7 @@
 # EVM yield vault using BTC-collateralized loans
 
+Note: There is also some documentation for the [architecture](./ARCHITECTURE.md) 
+
 This is a poc to implement a pathway for bitcoin holders to earn yield from an
 EVM chain without giving up complete control of BTC. The  BTC will remain 
 locked as collateral in joint custody with the lender on the EVM chain.

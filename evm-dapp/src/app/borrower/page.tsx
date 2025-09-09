@@ -846,7 +846,7 @@ export default function BorrowerPage() {
             </div>
           )}
           
-          {status && <div className="mt-2 text-sm text-gray-600">{status}</div>}
+          {status && status !== 'idle' && <div className="mt-2 text-sm text-gray-600">{status}</div>}
           {error && <div className="mt-2 text-sm text-red-600">{error.message}</div>}
         </div>
 
@@ -904,52 +904,11 @@ export default function BorrowerPage() {
           <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">Contract Status</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="font-medium text-green-800">EtherSwap</div>
-                <div className="text-green-600">
-                  {CONTRACTS.ETHER_SWAP ? (
-                    <span className="text-green-700">✅ Deployed</span>
-                  ) : (
-                    <span className="text-red-600">❌ Not Deployed</span>
-                  )}
-                </div>
-              </div>
-              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="font-medium text-purple-800">BtcCollateralLoan</div>
-                <div className="text-purple-600">
-                  {CONTRACTS.BTC_COLLATERAL_LOAN ? (
-                    <span className="text-purple-700">✅ Deployed</span>
-                  ) : (
-                    <span className="text-red-600">❌ Not Deployed</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Contract Addresses Display */}
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg mb-4">
-              <h3 className="font-medium text-gray-800 mb-3">Deployed Contract Addresses</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">EtherSwap:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.ETHER_SWAP || 'Not deployed'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">BtcCollateralLoan:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.BTC_COLLATERAL_LOAN || 'Not deployed'}
-                  </span>
-                </div>
-              </div>
-            </div>
 
             {/* Loan Statistics */}
             <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
               <div className="text-sm text-emerald-800">
-                <div className="font-medium">Total Loans: {totalLoans !== undefined ? Number(totalLoans) : 0}</div>
+                <div className="font-medium">Total Loans Applications: {totalLoans !== undefined ? Number(totalLoans) : 0}</div>
                 <div className="font-medium mt-1">Processing Fee: 0.001 rBTC</div>
                 <div className="font-medium mt-1">Minimum Loan Amount: 0.005 rBTC</div>
                 <button
@@ -961,29 +920,16 @@ export default function BorrowerPage() {
               </div>
             </div>
 
-            {/* Nonce Information */}
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="text-sm text-yellow-800">
-                <div className="font-medium">🔍 Nonce Information</div>
-                <div className="text-xs text-yellow-700 mt-1">
-                  <div>Wallet Address: <code className="bg-yellow-100 px-1 rounded">{account.addresses?.[0] || 'Not connected'}</code></div>
-                  <div>Current Nonce: <code className="bg-yellow-100 px-1 rounded">{accountNonce !== null ? accountNonce : 'Click button to check'}</code></div>
-                </div>
-                <button
-                  onClick={async () => {
-                    const nonce = await checkAndSyncNonce()
-                    if (nonce !== null && nonce !== false) {
-                      setAccountNonce(nonce)
-                      console.log('✅ Nonce refreshed:', nonce)
-                    }
-                  }}
-                  className="mt-2 px-3 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700 transition-colors"
-                >
-                  🔄 Check Nonce
-                </button>
-              </div>
-            </div>
+          
+          </div>
+        )}
 
+        {/* Borrower Functions */}
+        {account.status === 'connected' && CONTRACTS.BTC_COLLATERAL_LOAN && (
+          <div className="space-y-8">
+           
+            
+            
             {/* Enhanced Transaction Status Display */}
             {(requestLoanHash || acceptLoanHash || repaymentHash || withdrawHash) && (
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -1317,6 +1263,7 @@ export default function BorrowerPage() {
             <h2 className="text-2xl font-semibold mb-4 text-gray-800">📋 Step 1: Prepare Collateral</h2>
             <p className="text-gray-600 mb-6">
               Enter your loan details to get the P2TR (Taproot) escrow address where you need to send BTC to be used as collateral.
+              The amount to send should be enough to cover origination fees and bitcoin network fees.
             </p>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -1436,7 +1383,9 @@ export default function BorrowerPage() {
             {/* Request Loan */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Request New Loan</h3>
-              
+               <p className="text-gray-600 mb-6">
+                The minimum Loan Amount is 0.005 rBTC. A refundable Processing Fee of 0.001 rBTC will be collected as part of this transaction.
+               </p>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Loan Amount (rBTC)</label>
                 <input
@@ -1651,7 +1600,7 @@ export default function BorrowerPage() {
             {/* Signature Verification */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">Signature Verification</h3>
+                <h3 className="text-xl font-semibold text-gray-800">Borrower Signature Verification</h3>
                 <button
                   onClick={() => setShowSignatureVerification(!showSignatureVerification)}
                   className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
@@ -1735,34 +1684,7 @@ export default function BorrowerPage() {
               )}
             </div>
 
-            {/* Loan Information */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Loan Information</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-gray-800 mb-2">Current Configuration</h4>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <div>• Loan Duration: {CONTRACT_CONFIG.LOAN_DURATION} Rootstock blocks</div>
-                    <div>• Timelock Loan Request: {CONTRACT_CONFIG.TIMELOCK_LOAN_REQ} Rootstock blocks</div>
-                    <div>• Timelock BTC Escrow: {CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW} Rootstock blocks</div>
-                    <div>• Timelock Repayment Accept: {CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT} Rootstock blocks</div>
-                    <div>• Timelock BTC Collateral: {CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL} Rootstock blocks</div>
-                  </div>
-                </div>
-                
-                <div className="p-4 bg-gray-50 rounded-lg">
-                  <h4 className="font-medium text-gray-800 mb-2">Loan Process</h4>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <div>1. Request loan with x-only BTC public key</div>
-                    <div>2. Wait for lender offer</div>
-                    <div>3. Accept offer to activate loan</div>
-                    <div>4. Repay loan when due</div>
-                    <div>5. Reclaim BTC collateral</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+
           </div>
         )}
 
@@ -1770,11 +1692,18 @@ export default function BorrowerPage() {
         <div className="bg-green-50 rounded-xl p-6 mt-8">
           <h2 className="text-xl font-semibold mb-4 text-green-900">Borrower Instructions</h2>
           <div className="text-green-800 space-y-2">
-            <div>1. <strong>Request Loan</strong>: Submit a loan request with your x-only BTC public key and desired amounts</div>
-            <div>2. <strong>Wait for Offer</strong>: Lenders will review and offer loans to your request</div>
-            <div>3. <strong>Accept Offer</strong>: Accept a loan offer to activate the loan</div>
-            <div>4. <strong>Manage Repayment</strong>: Attempt repayment when the loan is due</div>
-            <div>5. <strong>Reclaim Collateral</strong>: Once repaid, reclaim your BTC collateral</div>
+            <div>1. <strong>Prepare Collateral</strong>: Select a preimage hash to use for the escrow output. Use a local version of the borrower-python-api
+            or any other method to generate a preimage and its hash. Store the preimage to use later when accepting a loan offer.</div>
+            <div>2. <strong>Send bitcoin to escrow output</strong>: Send funds to the address provided. You can use the python-api to verify that this is 
+            the correct P2TR address given your preimage hash, your x-only BTC public key, and the lender's x-only BTC public key. Save the transaction ID (txid) and output index (vout) to use in the "Request Loan" form.</div>
+            <div>3. <strong>Request Loan</strong>: Submit a loan request with your x-only BTC public key and desired amounts</div>
+            <div>4. <strong>Signature - after Lender preimage hash</strong>: Lender will associate a preimage hash with your request. You can use this with the python-api 
+            to generate your signature for the collateral transaction.</div>
+            <div>5 <strong>Upload signature</strong>: Then use the verification section to verify the signature. The lender will use the same verification before offering a loan.</div>
+            <div>6. <strong>Accept Offer</strong>: Accept a loan offer to activate the loan</div>
+            <div>7. <strong>Manage Repayment</strong>: Attempt repayment when the loan is due</div>
+            <div>8. <strong>Reclaim Collateral</strong>: Once repayment is accepted, reclaim your BTC collateral using the lender's preimage. You can use a local python-api
+             to create and broadcast the transaction for you.</div>
           </div>
         </div>
       </div>

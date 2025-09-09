@@ -640,7 +640,14 @@ export default function LenderPage() {
           
           <div className="mb-4">
             <div className="text-sm text-gray-700 mb-2">
-              Status: <span className="font-medium text-blue-600">{account.status}</span>
+              Status: <span className="font-medium text-blue-600">
+                {account.addresses && account.addresses.length > 0 ? 'Connected' :
+                 account.status === 'connected' || account.status === 'success' ? 'Connected' :
+                 account.status === 'connecting' ? 'Connecting...' :
+                 account.status === 'disconnected' ? 'Disconnected' :
+                 account.status === 'idle' ? 'Not Connected' : 
+                 'Not Connected'}
+              </span>
             </div>
             {account.addresses && (
               <div className="text-sm text-gray-700 mb-2">
@@ -692,7 +699,7 @@ export default function LenderPage() {
             </div>
           )}
           
-          {status && <div className="mt-2 text-sm text-gray-600">{status}</div>}
+          {status && status !== 'idle' && <div className="mt-2 text-sm text-gray-600">{status}</div>}
           {error && <div className="mt-2 text-sm text-red-600">{error.message}</div>}
         </div>
 
@@ -745,175 +752,10 @@ export default function LenderPage() {
           </div>
         )}
 
-        {/* Contract Status */}
-        {account.status === 'connected' && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
-            <h2 className="text-2xl font-semibold mb-4 text-gray-800">Contract Status</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="font-medium text-blue-800">EtherSwap</div>
-                <div className="text-blue-600">
-                  {CONTRACTS.ETHER_SWAP ? (
-                    <span className="text-blue-700">✅ Deployed</span>
-                  ) : (
-                    <span className="text-red-600">❌ Not Deployed</span>
-                  )}
-                </div>
-              </div>
-              <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <div className="font-medium text-purple-800">BtcCollateralLoan</div>
-                <div className="text-purple-600">
-                  {CONTRACTS.BTC_COLLATERAL_LOAN ? (
-                    <span className="text-purple-700">✅ Deployed</span>
-                  ) : (
-                    <span className="text-red-600">❌ Not Deployed</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Contract Addresses Display */}
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg mb-4">
-              <h3 className="font-medium text-gray-800 mb-3">Deployed Contract Addresses</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">EtherSwap:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.ETHER_SWAP || 'Not deployed'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-gray-700">BtcCollateralLoan:</span>
-                  <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-gray-900">
-                    {CONTRACTS.BTC_COLLATERAL_LOAN || 'Not deployed'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Loan Statistics */}
-            <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-              <div className="text-sm text-indigo-800">
-                <div className="font-medium">Total Loans: {totalLoans ? Number(totalLoans) : 0}</div>
-                <div className="font-medium mt-1">Current BTC Public Key: {lenderBtcPubkey || 'Not set'}</div>
-              </div>
-              
-              {/* Debug Information */}
-              <div className="mt-4 p-3 bg-white border border-indigo-200 rounded-lg">
-                <h4 className="font-medium text-indigo-800 mb-2">Debug Information</h4>
-                <div className="text-xs text-indigo-600 space-y-1">
-                  <div>Contract Address: {debugInfo.contractAddress || 'Not set'}</div>
-                  <div>Wallet Connected: {debugInfo.isConnected ? 'Yes' : 'No'}</div>
-                  {debugInfo.pubkeyError && <div>BTC Pubkey Error: {debugInfo.pubkeyError}</div>}
-                  {debugInfo.loanError && <div>Loan Error: {debugInfo.loanError}</div>}
-                  {debugInfo.totalLoansData !== null && <div>Total Loans Data: {typeof debugInfo.totalLoansData === 'bigint' ? Number(debugInfo.totalLoansData) : String(debugInfo.totalLoansData)}</div>}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Lender Functions */}
         {account.status === 'connected' && CONTRACTS.BTC_COLLATERAL_LOAN && (
           <div className="space-y-8">
-            {/* Update BTC Public Key */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Update BTC Public Key</h3>
-              
-              {/* Current BTC Public Key Display */}
-              {lenderBtcPubkey && lenderBtcPubkey !== '' && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-sm font-medium text-blue-800 mb-1">Current BTC Public Key (stored on chain):</div>
-                  <div className="text-xs text-blue-700 font-mono break-all">{lenderBtcPubkey}</div>
-                </div>
-              )}
-              
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">New BTC Schnorr Public Key (64 characters)</label>
-                <input
-                  type="text"
-                  value={newBtcPubkey}
-                  onChange={(e) => setNewBtcPubkey(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="370b519d519d4190b0584cd7836912ff78c46e2e2d18016e445f8e821b30b99d"
-                  maxLength={64}
-                />
-                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters (32 bytes as hex)</p>
-              </div>
-              <button
-                onClick={handleUpdateBtcPubkey}
-                disabled={updatePubkeyLoading || !newBtcPubkey}
-                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
-              >
-                {updatePubkeyLoading ? 'Updating...' : 'Update BTC Public Key'}
-              </button>
-            </div>
-
-            {/* Update Contract Parameters */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h3 className="text-xl font-semibold mb-4 text-gray-800">Update Contract Parameters</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Loan Duration (blocks)</label>
-                  <input
-                    type="number"
-                    value={newLoanDuration}
-                    onChange={(e) => setNewLoanDuration(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={CONTRACT_CONFIG.LOAN_DURATION.toString()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock Loan Request (blocks)</label>
-                  <input
-                    type="number"
-                    value={newTimelockLoanReq}
-                    onChange={(e) => setNewTimelockLoanReq(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={CONTRACT_CONFIG.TIMELOCK_LOAN_REQ.toString()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock BTC Escrow (blocks)</label>
-                  <input
-                    type="number"
-                    value={newTimelockBtcEscrow}
-                    onChange={(e) => setNewTimelockBtcEscrow(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW.toString()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock Repayment Accept (blocks)</label>
-                  <input
-                    type="number"
-                    value={newTimelockRepaymentAccept}
-                    onChange={(e) => setNewTimelockRepaymentAccept(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT.toString()}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock BTC Collateral (blocks)</label>
-                  <input
-                    type="number"
-                    value={newTimelockBtcCollateral}
-                    onChange={(e) => setNewTimelockBtcCollateral(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL.toString()}
-                  />
-                </div>
-              </div>
-              <button
-                onClick={handleUpdateParameters}
-                disabled={updateParamsLoading}
-                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
-              >
-                {updateParamsLoading ? 'Updating...' : 'Update Parameters'}
-              </button>
-            </div>
-
             {/* Loan Management */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h3 className="text-xl font-semibold mb-4 text-gray-800">Loan Management</h3>
@@ -1237,145 +1079,190 @@ export default function LenderPage() {
                 </button>
               </div>
             </div>
+
+            {/* Signature Verification */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-semibold text-gray-800">Signature Verification</h3>
+                <button
+                  onClick={() => setShowSignatureVerification(!showSignatureVerification)}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
+                >
+                  {showSignatureVerification ? 'Hide' : 'Show'} Verification
+                </button>
+              </div>
+              
+              {showSignatureVerification && (
+                <div className="space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    {borrowerSignature && (
+                      <button
+                        onClick={() => {
+                          // Debug: Log the actual borrowerSignature structure
+                          console.log('🔍 borrowerSignature structure:', borrowerSignature)
+                          console.log('🔍 Available fields:', Object.keys(borrowerSignature))
+                          
+                          // Load actual borrower signature data
+                          setSignatureData({
+                            sig_borrower: borrowerSignature.sig_borrower,
+                            tx_hex: borrowerSignature.tx_hex || borrowerSignature.txid,
+                            input_amount: borrowerSignature.input_amount,
+                            escrow_address_script: borrowerSignature.escrow_address_script,
+                            tapleaf_script_hex: borrowerSignature.tapleaf_script_hex,
+                            escrow_is_odd: borrowerSignature.escrow_is_odd
+                          })
+                        }}
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
+                      >
+                        📋 Load Borrower Signature
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        // Load sample signature data for testing
+                        setSignatureData({
+                          sig_borrower: "9ce3210b3b1b657a9d4f33ec0c3cd8f92155952ef6d6bae1c582df762c0298ad0d6c52d7d8efa8882906aef4c0c8e5c8e641f77ba0b09c20855b075bd26a56d6",
+                          tx_hex: "02000000000101f3f45bc999ab6484d45798e1c8ba926a81a6323b5035b6088ccc46fa10c8e7ff0000000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f000000000022512011c3194cb67847eef5f83e7d4816b1b788e4e556a13e00cbe9e27a175f5543e600000000",
+                          input_amount: 0.0111,
+                          escrow_address_script: "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
+                          tapleaf_script_hex: "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
+                          escrow_is_odd: false
+                        })
+                      }}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
+                    >
+                      🧪 Load Sample Data
+                    </button>
+                    <button
+                      onClick={() => setSignatureData(undefined)}
+                      className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
+                    >
+                      🗑️ Clear Data
+                    </button>
+                  </div>
+                  <SignatureVerification
+                    signatureData={signatureData}
+                    borrowerPubkey="274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa"
+                    onVerificationResult={(isValid, result) => {
+                      console.log('Signature verification result:', { isValid, result })
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Update BTC Public Key */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">Update BTC Public Key</h3>
+              
+              {/* Lender BTC Public Key Display */}
+              {lenderBtcPubkey && lenderBtcPubkey !== '' && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm font-medium text-blue-800 mb-1">Lender BTC Public Key (stored on chain):</div>
+                  <div className="text-xs text-blue-700 font-mono break-all">{lenderBtcPubkey}</div>
+                </div>
+              )}
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">New BTC Schnorr Public Key (64 characters)</label>
+                <input
+                  type="text"
+                  value={newBtcPubkey}
+                  onChange={(e) => setNewBtcPubkey(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="370b519d519d4190b0584cd7836912ff78c46e2e2d18016e445f8e821b30b99d"
+                  maxLength={64}
+                />
+                <p className="text-xs text-gray-500 mt-1">Must be exactly 64 characters (32 bytes as hex)</p>
+              </div>
+              <button
+                onClick={handleUpdateBtcPubkey}
+                disabled={updatePubkeyLoading || !newBtcPubkey}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+              >
+                {updatePubkeyLoading ? 'Updating...' : 'Update BTC Public Key'}
+              </button>
+            </div>
+
+            {/* Update Contract Parameters */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h3 className="text-xl font-semibold mb-4 text-gray-800">Update Contract Parameters</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Loan Duration (blocks)</label>
+                  <input
+                    type="number"
+                    value={newLoanDuration}
+                    onChange={(e) => setNewLoanDuration(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={CONTRACT_CONFIG.LOAN_DURATION.toString()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock Loan Request (blocks)</label>
+                  <input
+                    type="number"
+                    value={newTimelockLoanReq}
+                    onChange={(e) => setNewTimelockLoanReq(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_LOAN_REQ.toString()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock BTC Escrow (blocks)</label>
+                  <input
+                    type="number"
+                    value={newTimelockBtcEscrow}
+                    onChange={(e) => setNewTimelockBtcEscrow(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_ESCROW.toString()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock Repayment Accept (blocks)</label>
+                  <input
+                    type="number"
+                    value={newTimelockRepaymentAccept}
+                    onChange={(e) => setNewTimelockRepaymentAccept(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_REPAYMENT_ACCEPT.toString()}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Timelock BTC Collateral (blocks)</label>
+                  <input
+                    type="number"
+                    value={newTimelockBtcCollateral}
+                    onChange={(e) => setNewTimelockBtcCollateral(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={CONTRACT_CONFIG.TIMELOCK_BTC_COLLATERAL.toString()}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleUpdateParameters}
+                disabled={updateParamsLoading}
+                className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors font-medium"
+              >
+                {updateParamsLoading ? 'Updating...' : 'Update Parameters'}
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Signature Verification */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-semibold text-gray-800">Signature Verification</h3>
-            <button
-              onClick={() => setShowSignatureVerification(!showSignatureVerification)}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium"
-            >
-              {showSignatureVerification ? 'Hide' : 'Show'} Verification
-            </button>
-          </div>
-          
-          {showSignatureVerification && (
-            <div className="space-y-4">
-              <div className="flex gap-2 flex-wrap">
-                {borrowerSignature && (
-                  <button
-                    onClick={() => {
-                      // Debug: Log the actual borrowerSignature structure
-                      console.log('🔍 borrowerSignature structure:', borrowerSignature)
-                      console.log('🔍 Available fields:', Object.keys(borrowerSignature))
-                      
-                      // Load actual borrower signature data
-                      setSignatureData({
-                        sig_borrower: borrowerSignature.sig_borrower,
-                        tx_hex: borrowerSignature.tx_hex || borrowerSignature.txid,
-                        input_amount: borrowerSignature.input_amount,
-                        escrow_address_script: borrowerSignature.escrow_address_script,
-                        tapleaf_script_hex: borrowerSignature.tapleaf_script_hex,
-                        escrow_is_odd: borrowerSignature.escrow_is_odd
-                      })
-                    }}
-                    className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors font-medium text-sm"
-                  >
-                    📋 Load Borrower Signature
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    // Load sample signature data for testing
-                    setSignatureData({
-                      sig_borrower: "9ce3210b3b1b657a9d4f33ec0c3cd8f92155952ef6d6bae1c582df762c0298ad0d6c52d7d8efa8882906aef4c0c8e5c8e641f77ba0b09c20855b075bd26a56d6",
-                      tx_hex: "02000000000101f3f45bc999ab6484d45798e1c8ba926a81a6323b5035b6088ccc46fa10c8e7ff0000000000fdffffff02a0860100000000001976a914021c4448dec19b0e498cc9f8631033ef512b606388ac40420f000000000022512011c3194cb67847eef5f83e7d4816b1b788e4e556a13e00cbe9e27a175f5543e600000000",
-                      input_amount: 0.0111,
-                      escrow_address_script: "51205011619088ddb5a08d38c2c0f5026ecc285cabb3ec9fdc623d1c5fdc380c638c",
-                      tapleaf_script_hex: "a8203faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3882064b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8ac20274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afaba529d51",
-                      escrow_is_odd: false
-                    })
-                  }}
-                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
-                >
-                  🧪 Load Sample Data
-                </button>
-                <button
-                  onClick={() => setSignatureData(undefined)}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium text-sm"
-                >
-                  🗑️ Clear Data
-                </button>
-              </div>
-              <SignatureVerification
-                signatureData={signatureData}
-                borrowerPubkey="274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa"
-                onVerificationResult={(isValid, result) => {
-                  console.log('Signature verification result:', { isValid, result })
-                }}
-              />
-            </div>
-          )}
-        </div>
 
-        {/* Transaction Status Display */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mt-8">
-          <h2 className="text-xl font-semibold mb-4 text-gray-800">Transaction Status</h2>
-          
-          {/* Current Transaction States */}
-          <div className="mb-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <h3 className="font-medium text-gray-800 mb-3">Current Transaction States</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-              <div className={`p-2 rounded border ${offerLoading || isExtendOfferConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
-                <div className="font-medium text-gray-700">Extend Offer</div>
-                <div className="text-xs text-gray-600">
-                  {offerLoading ? 'Signing...' : isExtendOfferConfirming ? 'Mining...' : 'Ready'}
-                </div>
-              </div>
-              <div className={`p-2 rounded border ${acceptRepaymentLoading || isAcceptRepaymentConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
-                <div className="font-medium text-gray-700">Accept Repayment</div>
-                <div className="text-xs text-gray-600">
-                  {acceptRepaymentLoading ? 'Signing...' : isAcceptRepaymentConfirming ? 'Mining...' : 'Ready'}
-                </div>
-              </div>
-              <div className={`p-2 rounded border ${defaultLoading || isMarkAsDefaultedConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
-                <div className="font-medium text-gray-700">Mark Defaulted</div>
-                <div className="text-xs text-gray-600">
-                  {defaultLoading ? 'Signing...' : isMarkAsDefaultedConfirming ? 'Mining...' : 'Ready'}
-                </div>
-              </div>
-              <div className={`p-2 rounded border ${updatePubkeyLoading || isUpdatePubkeyConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
-                <div className="font-medium text-gray-700">Update Pubkey</div>
-                <div className="text-xs text-gray-600">
-                  {updatePubkeyLoading ? 'Signing...' : isUpdatePubkeyConfirming ? 'Mining...' : 'Ready'}
-                </div>
-              </div>
-              <div className={`p-2 rounded border ${updateParamsLoading || isUpdateParamsConfirming ? 'bg-yellow-100 border-yellow-300' : 'bg-gray-100 border-gray-300'}`}>
-                <div className="font-medium text-gray-700">Update Params</div>
-                <div className="text-xs text-gray-600">
-                  {updateParamsLoading ? 'Signing...' : isUpdateParamsConfirming ? 'Mining...' : 'Ready'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Transaction Hashes */}
-          {(extendOfferHash || acceptRepaymentHash || markAsDefaultedHash || updatePubkeyHash || updateParamsHash) && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-medium text-blue-800 mb-3">📝 Transaction Hashes</h3>
-              <div className="text-xs text-blue-700 space-y-1">
-                {extendOfferHash && <div>Extend Offer: <code className="bg-blue-100 px-1 rounded">{extendOfferHash}</code></div>}
-                {acceptRepaymentHash && <div>Accept Repayment: <code className="bg-blue-100 px-1 rounded">{acceptRepaymentHash}</code></div>}
-                {markAsDefaultedHash && <div>Mark Defaulted: <code className="bg-blue-100 px-1 rounded">{markAsDefaultedHash}</code></div>}
-                {updatePubkeyHash && <div>Update Pubkey: <code className="bg-blue-100 px-1 rounded">{updatePubkeyHash}</code></div>}
-                {updateParamsHash && <div>Update Params: <code className="bg-blue-100 px-1 rounded">{updateParamsHash}</code></div>}
-              </div>
-            </div>
-          )}
-        </div>
 
         {/* Instructions */}
         <div className="bg-blue-50 rounded-xl p-6 mt-8">
           <h2 className="text-xl font-semibold mb-4 text-blue-900">Lender Instructions</h2>
           <div className="text-blue-800 space-y-2">
-            <div>1. <strong>Update BTC Public Key</strong>: Set your Bitcoin Schnorr public key for collateral management</div>
-            <div>2. <strong>Configure Parameters</strong>: Adjust timelock values for loan management</div>
-            <div>3. <strong>Extend Loan Offers</strong>: Offer loans to borrowers who have requested them</div>
-            <div>4. <strong>Accept Repayments</strong>: Claim loan repayments from borrowers</div>
-            <div>5. <strong>Handle Defaults</strong>: Mark loans as defaulted when borrowers fail to repay</div>
+            <div>1.  <strong>Extend Loan Offers</strong>: Before offering a loan ensure that borrower has created 
+            the escrow ouput and uploaded a valid signature (check it)! to spent that output and lock as collateral.</div>
+            <div>2. <strong>Accept Repayments</strong>: Claim loan repayments from borrowers</div>
+            <div>3. <strong>Handle Defaults</strong>: Mark loans as defaulted when borrowers fail to repay on time</div>
+            <div>4. <strong>Configure Parameters</strong>: Adjust timelock values for loan management</div>
+            <div>5. <strong>Update BTC Public Key</strong>: Set your Bitcoin Schnorr public key for collateral management</div>
+            Updating keys and parameters will not impact active loans.
           </div>
         </div>
       </div>

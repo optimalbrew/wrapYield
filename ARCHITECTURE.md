@@ -1,6 +1,83 @@
-# BTC Yield Protocol - Complete Architecture
+# BTC Loan Protocol -  Architecture
 
-This document describes the complete architecture of the BTC Yield Protocol with the new Python API service integration.
+This document describes the complete architecture of the Collateralized BTC Loan system
+
+
+## Quick start for local testing
+
+Clone the repo. I assume you have Foundry installed for smart contract development. This may require you
+to install rust first. Most services run in docker. The project requires node: we use WAGMI for the dApp front end, and express for backend. Python 3.10+ is required for the bitcoin taproot scripts, addresses, transaction construction, signing and signature
+verification. Python api is built using `bitcoinutils` which requires 3.10.
+
+1. Start a local anvil (Ethereum) from any terminal. For determinstic anvil accounts and testing, I use a fixed seed 
+
+```bash
+ anvil --mnemonic-seed-unsafe 2
+```
+2. Deploy the smart contracts (`BtcCollateralLoan` and `EtherSwap`). Do this from the `evmchain/` directory using the 
+following script and the first anvil account's private key
+
+```bash
+forge script script/DeployLoanContract.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
+```
+3. Start bitcoin core in `regtest` mode. This can be done from `btc-backend` with
+
+```bash
+docker compose up -d
+```
+
+In the same (`btc-backend/`) directory we have a script (make it executable) to fund a couple of wallets used for testing (one wallet for the borrower and one for lender). Unlike ethereum, we are not using browser-based wallets for bitcoin. We use 
+bitcoin-core wallets.
+
+```bash
+./setup-wallets.sh
+```
+
+4. Start the Loan Dapp front end from `evm-dapp/`
+```bash
+npm run dev
+```
+this should start the dapp on `localhost:3000`
+
+
+5. Start the backend service(s) from `backend-service`
+
+```bash
+docker compose up -d
+```
+this will start the backend service, two python-apis (for lender and one for borrower), and the postgres service.
+
+If any of the containers are unhealthy or restartign then make sure bitcoin container is running and the wallets have been setup, also ensure anvil chain is up and contracts have been deployed.
+
+If everything looks healthy, then go to the front end to test out the loan process. The forms have some default inputs that
+should work to start with. On the bitcoin side, we need to interact with the python-api to send funds to the escrow address, 
+and for the borrower to pre-sign a collateral commitment transaction. 
+
+## The Loans Life Cycle
+
+The flow is something like this. On the dapp (ocalhost:3000) there are two main views: borrower and lender. Start with the lender view
+just to make sure the 
+
+1. Prepare collateral: On the front end, before requesting a loan, a needs the borrower to fill in their preimage hash - which can be generated using the python-api. This hash is used along with borrower and lender pubkeys to generate the escrow address.
+2. The borrower can use the python-api to send funds to this escrow address. The python-api can also be used to check that this is
+the correct address. The amount suggested by the front end includes an origination fee on top of the loan and a small amount of sats for bitcoin network fees. The borrower can increase this further to allow for higher mining fees.
+3. The txid and vout of the funding transaction are used to request a loan. 
+4. Once a loan is requested, the lender will associate their own preimage hash with it. This is used by the python-api to
+craft a transaction for the borrower to pre-sign. This pre-signed transaction will allow the lender to later spend the
+escrow output and lock coins in a collateral output.
+5. The borrower uses the lender's preimage hash to sign the transaction and uploads the signature on the front end.
+6. The lender verifies that the signature is valid for that specific transaction. Only after that will the lender offer a loan.
+7. Once a loan is offered the borrower can accept is using their secret preimage.
+8. The lender uses the revealed preimage, and uses the python-api to complete the transaction to move the funds from the escrow to
+the collateral output. This transaction also pays them the orgination fee.
+9. Borrowers can repay the loan on the front end any time before the loan duration is over.
+10. Once a repayment is in, the lender must accept it and reveal their secret preimage when doing so.
+11. The borrower can use the python-api and the revealed preimage to retrieve their collateral - which completes the loan lifecycle
+
+There are other ways that the escrow output and the collateral output can be spent. For example, in case of loan default, the lender gets the collateral output after a timelock. The python-api has methods to help with the construction of all necessary 
+transations.
+
+
 
 ## 🏗️ **System Overview**
 
@@ -21,31 +98,12 @@ This document describes the complete architecture of the BTC Yield Protocol with
 │   EVM Chain     │    │   PostgreSQL    │    │   Bitcoin       │
 │   Contracts     │    │   Database      │    │   Network       │
 │                 │    │                 │    │                 │
-│ • Loan State    │    │ • Users/Loans   │    │ • Transactions  │
-│ • Timelock      │    │ • Signatures    │    │ • Confirmation  │
-│ • Events        │    │ • Events        │    │ • Broadcasting  │
+│ • Loan State    │    │ • Users         │    │ • Transactions  │
+│ • Timelock      │    │ • Loans         │    │ • Confirmation  │
+│ • Events        │    │ • Signatures    │    │ • Broadcasting  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🔐 **Security Architecture**
-
-### **Lender (Platform Operator)**
-```
-🏦 LENDER OPERATIONS (Backend-Managed)
-├── Private keys stored in Python API service
-├── Automated transaction signing
-├── Backend-to-backend communication
-└── Full platform control
-```
-
-### **Borrower (End Users)**
-```
-👥 BORROWER OPERATIONS (Client-Side Only)
-├── MetaMask for EVM transactions
-├── Local btc-vaultero for Bitcoin signing
-├── Browser wallet management
-└── NO private keys touch the backend
-```
 
 ## 🔄 **Complete Transaction Flow**
 
@@ -101,12 +159,12 @@ Bitcoin Network → Confirmations → Python API → Node.js API → Database �
 - **Signature Storage**: Bitcoin signatures for separate signing workflow
 - **Transaction Records**: All Bitcoin and EVM transaction metadata
 - **User Management**: Lender and borrower account information
-- **Event Auditing**: Comprehensive audit trail for compliance
+
 
 ### **Frontend (evm-dapp)**
 - **Borrower Interface**: Loan request and management interface
 - **MetaMask Integration**: EVM transaction signing and broadcasting
-- **Signature Coordination**: Interface for Bitcoin signature workflows
+- **Signature Coordination**: Interface for Bitcoin signature (borrower pre-signed TX) uploads and Schnorr verfication
 - **Status Monitoring**: Real-time loan and transaction status updates
 
 ## 🚀 **Deployment Architecture**
@@ -120,21 +178,10 @@ docker-compose up
 # Services will be available at:
 # - Node.js API: http://localhost:3001
 # - Python API: http://localhost:8001  
+# - Python API (Borrower): http://localhost:8002 
 # - PostgreSQL: localhost:5432
 # - Redis: localhost:6379
 # - pgAdmin: http://localhost:8080 (with --profile dev)
-```
-
-### **Production Deployment**
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Load Balancer │    │   Container     │    │   Database      │
-│                 │    │   Orchestration │    │   Cluster       │
-│ • SSL/TLS       │    │                 │    │                 │
-│ • Rate Limiting │    │ • Node.js API   │    │ • PostgreSQL    │
-│ • Health Checks │    │ • Python API    │    │ • Redis         │
-│                 │    │ • Auto-scaling  │    │ • Backups       │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
 ## 🔗 **API Communication Patterns**
