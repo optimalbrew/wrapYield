@@ -31,6 +31,27 @@ export const BTC_COLLATERAL_LOAN_ABI = [
   },
   {
     "type": "function",
+    "name": "timelockRepaymentAccept",
+    "inputs": [],
+    "outputs": [{"type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "timelockBtcCollateral",
+    "inputs": [],
+    "outputs": [{"type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "loanDuration",
+    "inputs": [],
+    "outputs": [{"type": "uint256"}],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "lenderBtcPubkey", 
     "inputs": [],
     "outputs": [{"type": "string"}],

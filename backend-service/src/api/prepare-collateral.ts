@@ -106,7 +106,7 @@ router.post('/', async (req, res) => {
           borrower_pubkey: borrowerBtcPubkey,
           lender_pubkey: lenderBtcPubkey,
           preimage_hash_borrower: preimageHashBorrower.startsWith('0x') ? preimageHashBorrower.slice(2) : preimageHashBorrower,
-          borrower_timelock: Number(timelockBtcEscrow)
+          borrower_timelock: Math.floor(Number(timelockBtcEscrow) / 20)
         })
       })
 
@@ -116,8 +116,8 @@ router.post('/', async (req, res) => {
 
       const pythonData = await pythonResponse.json() as any
 
-      // Calculate suggested total with 200 sats buffer
-      const suggestedTotalSats = Math.ceil(parseFloat(totalAmountEth) * 100000000) + 200 // Convert to sats + 200 buffer
+      // Calculate suggested total with 500 sats buffer
+      const suggestedTotalSats = Math.ceil(parseFloat(totalAmountEth) * 100000000) + 500 // Convert to sats + 500 buffer
       const suggestedTotalBtc = suggestedTotalSats / 100000000 // Convert to BTC and round to 8 decimal places
       const suggestedTotalBtcRounded = Number(suggestedTotalBtc.toFixed(8))
 
@@ -147,7 +147,7 @@ router.post('/', async (req, res) => {
           suggestedTotal: {
             sats: suggestedTotalSats,
             btc: suggestedTotalBtcRounded,
-            note: 'Includes 200 sats buffer for Bitcoin fees'
+            note: 'Includes 500 sats buffer for Bitcoin fees'
           },
           
           // Bitcoin address from python-api

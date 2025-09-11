@@ -27,13 +27,12 @@ export const loanStatuses = [
 // Loans table - main loan tracking
 export const loans = pgTable('loans', {
   id: uuid('id').primaryKey().defaultRandom(),
-  evmContractId: varchar('evm_contract_id', { length: 50 }).unique(), // Loan ID from smart contract (stored as string)
+  loanReqId: varchar('loan_req_id', { length: 50 }).unique(), // Loan ID from smart contract (stored as string)
   borrowerId: uuid('borrower_id').notNull().references(() => users.id),
   lenderId: uuid('lender_id').references(() => users.id),
   
   // Loan parameters (stored as NUMERIC to avoid BigInt serialization issues)
   amount: decimal('amount', { precision: 78, scale: 0 }).notNull(), // Loan amount in BTC/ETH
-  collateralAmount: decimal('collateral_amount', { precision: 78, scale: 0 }),
   bondAmount: decimal('bond_amount', { precision: 78, scale: 0 }),
   interestRate: decimal('interest_rate', { precision: 5, scale: 2 }), // Annual percentage
   durationBlocks: integer('duration_blocks').notNull(),
@@ -44,12 +43,13 @@ export const loans = pgTable('loans', {
   // Bitcoin addresses and keys
   borrowerBtcPubkey: varchar('borrower_btc_pubkey', { length: 66 }).notNull(),
   lenderBtcPubkey: varchar('lender_btc_pubkey', { length: 66 }),
-  escrowAddress: varchar('escrow_address', { length: 63 }), // P2TR address
-  collateralAddress: varchar('collateral_address', { length: 63 }),
+  escrowAddress: varchar('escrow_address', { length: 64 }), // P2TR address
+  collateralAddress: varchar('collateral_address', { length: 64 }),
   
   // Bitcoin transaction details
   btcTxid: varchar('btc_txid', { length: 66 }), // Bitcoin transaction ID of the escrow UTXO
   btcVout: integer('btc_vout'), // Output index of the escrow UTXO in the bitcoin transaction
+  collateralCommitTx: varchar('collateral_commit_tx', { length: 66 }), // Bitcoin transaction ID of the collateral commitment
   
   // Preimage hashes for HTLC
   preimageHashBorrower: varchar('preimage_hash_borrower', { length: 66 }),
@@ -70,7 +70,6 @@ export const loans = pgTable('loans', {
   repaymentBlockHeight: decimal('repayment_block_height', { precision: 20, scale: 0 }),
   
   // Metadata
-  metadata: jsonb('metadata'), // Additional loan-specific data
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 })

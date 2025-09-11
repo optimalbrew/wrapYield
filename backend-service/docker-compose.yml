@@ -37,9 +37,12 @@ services:
       PYTHON_API_BITCOIN_RPC_PASSWORD: localtest
       # Wallet name for this service
       PYTHON_API_BITCOIN_WALLET_NAME: python-api-test
+      # Lender private key for witness completion (WIF format)
+      PYTHON_API_LENDER_PRIVATE_KEY: ${LENDER_PRIVATE_KEY}
     volumes:
       - ../btc-vaultero/src:/app/btc-vaultero/src:ro  # Mount only btc-vaultero source code at runtime
       - ../python-api/examples:/app/examples  # Mount examples directory for signature files
+      - signature-tmp:/tmp  # Shared volume for temporary signature files
     ports:
       - "8001:8001"
     healthcheck:
@@ -98,6 +101,8 @@ services:
       DATABASE_URL: postgresql://btc_yield_user:btc_yield_password@postgres:5432/btc_yield
       # Python API connection
       PYTHON_API_URL: http://python-api:8001
+      # Lender private key for witness completion
+      LENDER_PRIVATE_KEY: ${LENDER_PRIVATE_KEY}
       # CORS origins
       CORS_ORIGINS: '["http://localhost:3000", "http://localhost:3002"]'
       # Contract addresses (loaded from .env file)
@@ -107,6 +112,8 @@ services:
       ANVIL_RPC_URL: ${ANVIL_RPC_URL}
     ports:
       - "3002:3002"
+    volumes:
+      - signature-tmp:/tmp  # Shared volume for temporary signature files
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,6 +143,7 @@ services:
 
 volumes:
   postgres_data:
+  signature-tmp:
 
 networks:
   default:

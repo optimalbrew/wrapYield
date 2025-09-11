@@ -9,6 +9,8 @@ Clone the repo. I assume you have Foundry installed for smart contract developme
 to install rust first. Most services run in docker. The project requires node: we use WAGMI for the dApp front end, and express for backend. Python 3.10+ is required for the bitcoin taproot scripts, addresses, transaction construction, signing and signature
 verification. Python api is built using `bitcoinutils` which requires 3.10.
 
+note: the scripts `start-local.sh` and `stop-local.sh` can be used to start/stop all services
+
 1. Start a local anvil (Ethereum) from any terminal. For determinstic anvil accounts and testing, I use a fixed seed 
 
 ```bash
@@ -78,6 +80,108 @@ There are other ways that the escrow output and the collateral output can be spe
 transations.
 
 
+### Examples to get started
+On the borrower and lender page the forms are mostly prefilled with test data that can be used readily.
+
+However, we do need to run a couple of things by hand to complete the full cycle. The first is funding the escrow output
+
+```bash
+curl -X POST http://localhost:8002/bitcoin/fund-address \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "bcrt1pjffezpv29u3dgm3vxv8mv3pwxmy24n5y8d030795tzuce63ugc0q6ln2hx",
+    "amount": 0.0102,
+    "label": "test-funding"
+  }'
+```
+The `txid` and `vout` will be needed when requesting a loan. The "address" is whatever the "escrow address" is. This
+is different for each borrower and preimagehash used. The borrower page on the front end will display this address,
+but we can also compute it directly with the python-api (see examples below)
+
+
+The second interaction with the borrower-python-api is to generate a borrower signature. This can be generated using
+
+```bash
+curl -X POST "http://localhost:8002/transactions/borrower-signature" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "loan_id": "test-loan-example-012",
+    "escrow_txid": "09e23cb9290d340b6f848c6c18308eafa311be51246ae4935ba2f17913ccb64a",
+    "escrow_vout": 0,
+    "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+    "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+    "preimage_hash_borrower": "114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927",
+    "preimage_hash_lender": "646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3",
+    "borrower_timelock": 100,
+    "lender_timelock": 27150,
+    "collateral_amount": "0.01",
+    "origination_fee": "0.0001",
+    "borrower_private_key": "cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz"
+  }' | jq
+```
+
+The generated JSON file with the signature will be in `/python-api/examples/` .. look for the same name as `"loan_id":` 
+in the call, e.g. `test-loan-example-012.json`. The `escrow_txid` and `escrow_vout` in the call are the ones from the `fund-address` above. The json file, or its contents must be posted on the borrower page so the borrower's
+signature can be verified by a lender - a necessary step before the lender will offer loan.
+
+Apart from these two interactions on the bitcoin side, the prefilled values on the front end should be adequate to complete
+a complete loan life cycle.
+
+
+#### Escrow and Collateral Address generation examples
+
+Even for the same borrower and lender pubkey, the initial escrow and the subsequent collateral outputs will 
+be unique for each preimage hash combination (also the relative locktimes)
+
+```bash
+curl -X POST http://localhost:8002/vaultero/nums-p2tr-addr-0 -H "Content-Type: application/json" -d '{
+  "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+  "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+  "preimage_hash_borrower": "114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927",
+  "borrower_timelock": 100
+}' | jq
+```
+The `borrower_timelock` of 100 bitcoin blocks just under a day.
+
+and address of collateral output where the bitcoin collateral will be held for the duration of the loan 
+
+```bash
+curl -X POST http://localhost:8002/vaultero/nums-p2tr-addr-1 -H "Content-Type: application/json" -d '{
+  "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
+  "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
+  "preimage_hash_lender": "646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3",
+  "lender_timelock": 27150
+}' | jq
+```
+The `lender timelock` is for the collateral, and this is for the duration of the loan, which is roughly 6 months. The smart contract stores these
+values in terms of Roostock blocks. The backend converts them to bitcoin blocks (dividing by 20), before calling the python-api. When using the
+python-api directly, users should be mindful of thiking in terms of bitcoin blocks (the python api has nothing to do with the evm-side of things). 
+
+
+## Database and Loan States
+
+For any given loan_id
+
+```
+docker-compose exec postgres psql -U btc_yield_user -d btc_yield
+```
+For a single loan, use `\x` to activate column view for better readability.
+
+```
+SELECT * FROM loans WHERE loan_req_id = '3';
+```
+
+The state of the collateral can be verified using the tx is (`collateral_commit_tx` in the `loans` table). The `vout` for 
+the collateral output is 1 (output 0 is origation fee)
+
+```
+curl -X GET http://localhost:8001/utxo/collateral_commit_tx/1/details
+```
+
+
+
+
+
 
 ## 🏗️ **System Overview**
 
@@ -105,230 +209,6 @@ transations.
 ```
 
 
-## 🔄 **Complete Transaction Flow**
-
-### **1. Loan Request**
-```
-Borrower → MetaMask → EVM Contract → Event → Node.js API → Database
-```
-
-### **2. Escrow Transaction Creation**
-```
-Node.js API → Python API → btc-vaultero → Raw TX → Database Storage
-```
-
-### **3. Borrower Signature (Client-Side)**
-```
-Borrower → Local btc-vaultero → Sign TX → Send Signature → Node.js API → Database
-```
-
-### **4. Lender Signature & Completion**
-```
-Node.js API → Python API → Sign with Lender Key → Complete Witness → Broadcast
-```
-
-### **5. Status Updates**
-```
-Bitcoin Network → Confirmations → Python API → Node.js API → Database → Frontend
-```
-
-## 📊 **Service Responsibilities**
-
-### **Node.js Backend Service** (Port 3001)
-- **Loan Orchestration Engine**: Complete loan lifecycle state machine and workflow automation
-- **EVM Event Monitor**: Real-time contract event listening, parsing, and state synchronization
-- **Cross-Chain State Synchronizer**: EVM ↔ Bitcoin state validation, timelock enforcement, dispute resolution
-- **Bitcoin Transaction Coordinator**: Transaction creation, signature workflow management, broadcasting
-- **Error Recovery Service**: Comprehensive error handling, automatic recovery, and alerting
-- **Monitoring & Alerting**: Performance metrics, health checks, and real-time alerting
-- **Database Operations**: PostgreSQL for loans, users, signatures, events, workflows
-- **API Coordination**: REST endpoints for frontend and signature workflows  
-- **User Management**: Lender and borrower account management
-- **Audit Trail**: Complete event logging and compliance
-
-### **Python API Service** (Port 8001)  
-- **Bitcoin Operations**: Wraps btc-vaultero package functionality
-- **Lender Key Management**: Secure storage and usage of lender private keys
-- **Transaction Creation**: Escrow, collateral, and settlement transactions
-- **Transaction Signing**: Lender signatures for Bitcoin transactions
-- **Broadcasting**: Transaction broadcast to Bitcoin network
-- **Network Monitoring**: Bitcoin transaction status and confirmations
-
-### **PostgreSQL Database**
-- **Loan Lifecycle**: Complete loan state tracking and management
-- **Signature Storage**: Bitcoin signatures for separate signing workflow
-- **Transaction Records**: All Bitcoin and EVM transaction metadata
-- **User Management**: Lender and borrower account information
-
-
-### **Frontend (evm-dapp)**
-- **Borrower Interface**: Loan request and management interface
-- **MetaMask Integration**: EVM transaction signing and broadcasting
-- **Signature Coordination**: Interface for Bitcoin signature (borrower pre-signed TX) uploads and Schnorr verfication
-- **Status Monitoring**: Real-time loan and transaction status updates
-
-## 🚀 **Deployment Architecture**
-
-### **Development Setup**
-```bash
-# Start all services
-cd backend-service
-docker-compose up
-
-# Services will be available at:
-# - Node.js API: http://localhost:3001
-# - Python API: http://localhost:8001  
-# - Python API (Borrower): http://localhost:8002 
-# - PostgreSQL: localhost:5432
-# - Redis: localhost:6379
-# - pgAdmin: http://localhost:8080 (with --profile dev)
-```
-
-## 🔗 **API Communication Patterns**
-
-### **Frontend ↔ Node.js API**
-```typescript
-// Borrower creates signature client-side
-const signature = await localWallet.signBitcoinTransaction(rawTx)
-
-// Send only signature to backend
-await fetch('/api/signatures', {
-  method: 'POST',
-  body: JSON.stringify({
-    signatureData: signature,
-    transactionHex: rawTx,
-    signatureType: 'borrower'
-  })
-})
-```
-
-### **Node.js API ↔ Python API**
-```typescript
-// Node.js requests Bitcoin transaction creation
-const response = await fetch('http://python-api:8001/transactions/escrow', {
-  method: 'POST',
-  body: JSON.stringify({
-    loan_id: loanId,
-    borrower_pubkey: borrowerPubkey,
-    amount: amount.toString()
-  })
-})
-```
-
-### **Python API ↔ btc-vaultero**
-```python
-# Python API calls btc-vaultero functions
-from btc_vaultero import create_escrow_transaction
-
-result = create_escrow_transaction(
-    borrower_pubkey=request.borrower_pubkey,
-    lender_pubkey=self.lender_pubkey,
-    preimage_hash=request.preimage_hash_borrower,
-    timelock=request.borrower_timelock,
-    amount=request.amount
-)
-```
-
-## 🔧 **Configuration Management**
-
-### **Shared Configuration** (`config/parameters.json`)
-```json
-{
-  "timelocks": {
-    "loanDuration": 1008,
-    "btcEscrow": 144,
-    "btcCollateral": 2016
-  },
-  "fees": {
-    "processing": 0.001,
-    "origination": 0.0001
-  },
-  "interestRates": {
-    "default": 5.0
-  }
-}
-```
-
-### **Service-Specific Configuration**
-- **Node.js**: Database, API keys, service URLs
-- **Python**: Bitcoin network, lender keys, RPC configuration  
-- **Frontend**: Contract addresses, API endpoints, wallet configuration
-
-## 🔒 **Security Considerations**
-
-### **Key Management**
-- ✅ **Lender keys**: Managed by Python API (platform operator)
-- ❌ **Borrower keys**: NEVER managed by backend services
-- ✅ **API keys**: Secure communication between services
-- ✅ **Database encryption**: Sensitive data encrypted at rest
-
-### **Network Security**
-- **TLS/HTTPS**: All API communication encrypted
-- **VPC/Private Networks**: Services communicate on private networks
-- **Firewall Rules**: Restricted access to database and internal APIs
-- **Rate Limiting**: Protection against API abuse
-
-### **Authentication & Authorization**
-- **JWT Tokens**: Secure user session management
-- **API Authentication**: Service-to-service authentication
-- **Role-Based Access**: Lender vs borrower permissions
-- **Audit Logging**: All sensitive operations logged
-
-## 📈 **Scalability & Performance**
-
-### **Horizontal Scaling**
-- **Stateless Services**: Both Node.js and Python APIs are stateless
-- **Database Clustering**: PostgreSQL read replicas for scaling
-- **Redis Clustering**: Distributed caching and job queues
-- **Container Orchestration**: Kubernetes for auto-scaling
-
-### **Performance Optimization**
-- **Database Indexing**: Optimized queries for loan and signature lookups
-- **Connection Pooling**: Efficient database connection management
-- **Caching Strategy**: Redis for frequently accessed data
-- **API Response Caching**: Cacheable endpoints for static data
-
-## 🧪 **Testing Strategy**
-
-### **Unit Testing**
-- **Node.js Services**: Jest for business logic testing
-- **Python Services**: Pytest for Bitcoin operations testing
-- **Database Models**: Automated schema validation
-- **Configuration**: Shared parameter validation
-
-### **Integration Testing**
-- **API Communication**: End-to-end service communication tests
-- **Database Operations**: Complete CRUD operation testing
-- **Bitcoin Integration**: Mock and testnet transaction testing
-- **Signature Workflows**: Multi-party signature coordination testing
-
-### **End-to-End Testing**
-- **Complete Loan Flow**: From request to settlement
-- **Error Handling**: Failure scenarios and recovery
-- **Security Testing**: Authentication and authorization
-- **Performance Testing**: Load testing for scalability
-
-## 🔄 **Development Workflow**
-
-### **Local Development**
-```bash
-# 1. Start infrastructure
-cd backend-service
-docker-compose up postgres redis
-
-# 2. Start Python API
-cd ../python-api  
-python start.py
-
-# 3. Start Node.js API
-cd ../backend-service
-npm run dev
-
-# 4. Start Frontend
-cd ../evm-dapp
-npm run dev
-```
-
 ### **Code Organization**
 ```
 btc-yield/
@@ -341,141 +221,6 @@ btc-yield/
 └── ARCHITECTURE.md        # This document
 ```
 
-## 🛣️ **Implementation Roadmap**
-
-### **Phase 1: Foundation** ✅
-- [x] Database schema design
-- [x] Node.js API with signature workflows
-- [x] Python API service creation
-- [x] Docker container setup
-- [x] Service integration architecture
-
-### **Phase 2: Enhanced Backend Services** 🔄
-- [ ] **Loan Orchestration Engine**: Complete workflow automation and state management
-- [ ] **EVM Event Monitor**: Real-time contract event processing and state synchronization
-- [ ] **Cross-Chain State Synchronizer**: EVM ↔ Bitcoin consistency validation and dispute resolution
-- [ ] **Error Recovery Service**: Comprehensive error handling and automatic recovery
-- [ ] **Monitoring & Alerting**: Performance metrics, health checks, and real-time alerting
-- [ ] Real btc-vaultero integration (replace mocks)
-- [ ] Bitcoin network broadcasting
-- [ ] Transaction confirmation monitoring
-
-### **Phase 3: Production Integration**
-- [ ] Frontend integration with enhanced APIs
-- [ ] End-to-end testing and validation
-- [ ] Performance optimization and scaling
-- [ ] Security audit and hardening
-
-### **Phase 4: Production Ready**
-- [ ] Authentication and authorization
-- [ ] Comprehensive testing suite
-- [ ] Production deployment guides
-- [ ] Documentation and training materials
-
-## 🏗️ **Enhanced Backend Service Architecture**
-
-The backend service has been significantly enhanced beyond basic scaffolding to provide comprehensive loan orchestration capabilities:
-
-### **Core Service Components**
-
-#### **1. Loan Orchestration Engine** (`src/services/loanOrchestration.ts`)
-- **State Machine Management**: Tracks loan progression through all lifecycle stages
-- **Workflow Automation**: Executes multi-step processes with dependency management
-- **Event Coordination**: Synchronizes EVM and Bitcoin events
-- **Business Logic**: Enforces lending rules, timelocks, and conditions
-- **Recovery Mechanisms**: Handles failures and retry operations
-
-#### **2. EVM Event Monitor** (`src/services/evmEventMonitor.ts`)
-- **Real-time Event Listening**: Monitors `BtcCollateralLoan` and `EtherSwap` contracts
-- **Event Processing**: Parses and validates contract events
-- **State Updates**: Updates loan status based on EVM events
-- **Queue Management**: Handles event processing with retry logic
-- **Historical Sync**: Replays missed events on startup
-
-#### **3. Cross-Chain State Synchronizer** (`src/services/crossChainSync.ts`)
-- **State Validation**: Ensures EVM and Bitcoin states are consistent
-- **Timelock Management**: Enforces Bitcoin and EVM timelocks
-- **Dispute Handling**: Manages borrower/lender disputes
-- **Reconciliation**: Detects and resolves state inconsistencies
-- **Audit Trail**: Maintains complete transaction history
-
-#### **4. Error Recovery Service** (`src/services/errorRecovery.ts`)
-- **Error Classification**: Categorizes errors by type and severity
-- **Automatic Recovery**: Implements recovery strategies for different error types
-- **Retry Logic**: Configurable retry attempts with exponential backoff
-- **Alerting**: Sends alerts for critical errors
-- **Error Analytics**: Tracks error patterns and recovery success rates
-
-#### **5. Monitoring & Alerting** (`src/services/monitoring.ts`)
-- **Performance Metrics**: Tracks loan processing rates, transaction success rates, response times
-- **Health Checks**: Monitors database, Python API, and EVM node health
-- **Real-time Alerting**: Configurable alerts for critical conditions
-- **System Observability**: Memory usage, CPU usage, uptime tracking
-- **Alert Channels**: Console, email, Slack integration support
-
-### **Enhanced Database Schema**
-
-The database schema has been extended with additional tables for workflow tracking and event processing:
-
-```sql
--- Workflow tracking
-CREATE TABLE loan_workflows (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    loan_id UUID NOT NULL REFERENCES loans(id),
-    workflow_type VARCHAR(50) NOT NULL,
-    status VARCHAR(30) NOT NULL DEFAULT 'pending',
-    current_step VARCHAR(100),
-    steps_completed JSONB,
-    error_details JSONB,
-    retry_count INTEGER DEFAULT 0
-);
-
--- Event processing tracking
-CREATE TABLE evm_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    loan_id UUID REFERENCES loans(id),
-    contract_address VARCHAR(42) NOT NULL,
-    event_name VARCHAR(100) NOT NULL,
-    block_number BIGINT NOT NULL,
-    transaction_hash VARCHAR(66) NOT NULL,
-    log_index INTEGER NOT NULL,
-    event_data JSONB NOT NULL,
-    processing_status VARCHAR(30) DEFAULT 'pending'
-);
-
--- Bitcoin transaction monitoring
-CREATE TABLE bitcoin_transaction_monitoring (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    transaction_id UUID NOT NULL REFERENCES bitcoin_transactions(id),
-    txid VARCHAR(64) NOT NULL,
-    monitoring_status VARCHAR(30) DEFAULT 'active',
-    confirmation_target INTEGER DEFAULT 6,
-    last_checked_at TIMESTAMP,
-    confirmations INTEGER DEFAULT 0
-);
-```
-
-### **Event-Driven Architecture**
-
-The enhanced backend service implements a comprehensive event-driven architecture:
-
-```typescript
-// Event flow example
-LoanRequested Event → Loan Orchestration Engine → Escrow Setup Workflow
-    ↓
-EVM Event Monitor → Cross-Chain State Sync → Bitcoin Transaction Coordinator
-    ↓
-Error Recovery Service → Monitoring & Alerting → Database Updates
-```
-
-### **Key Benefits of Enhanced Architecture**
-
-✅ **Automated Loan Management**: Complete loan lifecycle automation with minimal manual intervention
-✅ **Cross-Chain Consistency**: Ensures EVM and Bitcoin states remain synchronized
-✅ **Robust Error Handling**: Automatic recovery from common failure scenarios
-✅ **Real-time Monitoring**: Comprehensive observability and alerting
-✅ **Scalable Design**: Microservice architecture with independent scaling
-✅ **Audit Compliance**: Complete transaction and event logging for regulatory compliance
 
 ## 📚 **Documentation**
 
@@ -485,20 +230,3 @@ Error Recovery Service → Monitoring & Alerting → Database Updates
 - **[Configuration](config/README.md)** - Shared configuration system
 - **[BTC-Vaultero](btc-vaultero/)** - Bitcoin transaction package
 - **[Frontend](evm-dapp/)** - React/Wagmi application
-
-## 🤝 **Contributing**
-
-1. **Follow architecture patterns** established in this document
-2. **Maintain security model** (no borrower keys in backend)
-3. **Test integrations thoroughly** before submitting changes
-4. **Update documentation** when making architectural changes
-5. **Use shared configuration** for consistent parameters across services
-
-## 🎯 **Key Benefits**
-
-✅ **Security**: Borrower keys never touch backend, lender has full control
-✅ **Scalability**: Microservice architecture with independent scaling
-✅ **Maintainability**: Clear separation of concerns and responsibilities  
-✅ **Flexibility**: Easy to add new features and integrate with other systems
-✅ **Reliability**: Robust error handling and recovery mechanisms
-✅ **Auditability**: Complete transaction and event logging for compliance

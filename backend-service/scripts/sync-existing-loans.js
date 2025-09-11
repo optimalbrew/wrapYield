@@ -66,7 +66,7 @@ async function syncExistingLoans() {
               repaymentBlockHeight: loanData.repaymentBlockheight ? Number(loanData.repaymentBlockheight) : null,
               updatedAt: new Date()
             })
-            .where(eq(loans.evmContractId, i.toString()));
+            .where(eq(loans.loanReqId, i.toString()));
           
           console.log(`   ✅ Updated database for loan ${i}`);
         } catch (dbError) {

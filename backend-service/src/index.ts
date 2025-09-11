@@ -8,6 +8,7 @@ import evmEventMonitor from './services/evmEventMonitor'
 // Import API routes
 import bitcoinSignaturesRouter from './api/bitcoinSignatures'
 import prepareCollateralRouter from './api/prepare-collateral'
+import signatureVerificationRouter from './api/signatureVerification'
 
 // Load environment variables
 dotenv.config()
@@ -86,6 +87,7 @@ app.get('/api/sync/status', (req, res) => {
 // API routes
 app.use('/api/bitcoin/signatures', bitcoinSignaturesRouter)
 app.use('/api/prepare-collateral', prepareCollateralRouter)
+app.use('/api/signature-verification', signatureVerificationRouter)
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -96,7 +98,8 @@ app.get('/', (req, res) => {
       health: '/health',
       syncStatus: '/api/sync/status',
       bitcoinSignatures: '/api/bitcoin/signatures',
-      prepareCollateral: '/api/prepare-collateral'
+      prepareCollateral: '/api/prepare-collateral',
+      signatureVerification: '/api/signature-verification'
     },
     documentation: 'https://github.com/your-org/btc-yield-protocol'
   })

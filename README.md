@@ -121,41 +121,4 @@ account for differences in number of "confirmations".
 
 ## How to run locally
 
-Clone the repo.
-
-Pre-requisties: Project uses Foundry for smart contract dev, so we need rust. Python 13 used for all bitcoin side of things. Node is also required with typescript.. the backend server is based on express and the front end Dapp is built using Wagmi react. Everything else has a docker file with requirements.
-
-
-Start Bitcoin core (in regtest): From root `cd btc-backend` and then `docker compose up -d`
-
-Start local ethereum node: from any terminal `anvil --mnemonic-seed-unsafe 2` .. this constant seed means deployment addresses will be 
-reproducible. 
-* If a different chain is used, the contract deployment addresses need to be updated in `evm-dapp/.env.local` 
-* Deploy the contracts (BtcCollateralLoan and Etherswap) using 
-
-```
-cd evmchain #from project root
-
-#deploy using default 0 account of anvil chain with seed 2
-
-forge script script/DeployLoanContract.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
-```
-
-Start the wagmi Dapp: from project root: `cd evm-dapp` and `npm run dev` .. do this after the anvil chain is up and contracts have been deployed.
-* then open the front end at `http://localhost:3000/`
-* connect a browser wallet (metamask, rabby etc) -> the wallet should be connected to the anvil rpc http://127.0.0.1:8545
-* create a few accounts: use the first for `lender` and the others for `borrower1`, `borrower2` etc.
-* check the borrower and lender pages but do not initiate any actions before the backend service has started 
-
-now start all other services (backend). From root `cd backend-service` and `docker compose up -d` which will build and run
-
-* the service consists of a node express backend server
-* the service moniters the evm chain for loan events
-* a postgres database to keep track of loans
-* connects to python-api for bitcoin transaction services e.g. address computation, transaction signing
-* there are two python-api services: one for the lender, who is also the platform operator, and one for the borrower.
-* the borrower needs to expose their private key to the python-api for signing transactions. Which is why, they should
-run their own python-api locally (and not worry about the other services)
-* for ease of testing, we run both the borrower and lender python-apis on the same machine.
-* for testing, we also use a single bitcoin and anvil endpoint for all users
-
+See [architecture.md](./ARCHITECTURE.md)

@@ -58,8 +58,8 @@ curl -X POST "http://localhost:8001/vaultero/nums-p2tr-addr-0" \
   -d '{
     "borrower_pubkey": "02274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
     "lender_pubkey": "0264b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
-    "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
-    "borrower_timelock": 100
+    "preimage_hash_borrower": "114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927",
+    "borrower_timelock": 2000
   }' | jq
 ```
 
@@ -72,8 +72,8 @@ localhost:8002 for borrower python-api
 curl -X POST http://localhost:8002/bitcoin/fund-address \
   -H "Content-Type: application/json" \
   -d '{
-    "address": "bcrt1ph0445r4yg6jh6wcflqna3qwtk4jc83xqal80jnyt9tz4gwzdnrcsv0ysqn",
-    "amount": 0.010102,
+    "address": "bcrt1pjffezpv29u3dgm3vxv8mv3pwxmy24n5y8d030795tzuce63ugc0q6ln2hx",
+    "amount": 0.0102,
     "label": "test-funding"
   }'
 ```
@@ -235,17 +235,17 @@ curl -X POST "http://localhost:8001/transactions/collateral" \
 curl -X POST "http://localhost:8002/transactions/borrower-signature" \
   -H "Content-Type: application/json" \
   -d '{
-    "loan_id": "test-loan-example-456",
-    "escrow_txid": "d6f954878b9ef4b8dc9c21dae1f093e3f2d01b4388f2af6c666f5c1c10eae051",
-    "escrow_vout": 1,
+    "loan_id": "test-loan-example-012",
+    "escrow_txid": "09e23cb9290d340b6f848c6c18308eafa311be51246ae4935ba2f17913ccb64a",
+    "escrow_vout": 0,
     "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
     "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
-    "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
+    "preimage_hash_borrower": "114810e3c12909f2fb9cbf59c11ee5c9d107556476685f7e14205eab094d4927",
     "preimage_hash_lender": "646e58c6fbea3ac4750a2279d4b711fed954e3cb48319c630570e3143e4553e3",
-    "borrower_timelock": 100,
-    "lender_timelock": 144,
+    "borrower_timelock": 2000,
+    "lender_timelock": 1500,
     "collateral_amount": "0.01",
-    "origination_fee": "0.001",
+    "origination_fee": "0.0001",
     "borrower_private_key": "cNwW6ne3j9jUDWC3qFG5Bw3jzWvSZjZ2vgyP5LsTVj4WrJkJqjuz"
   }' | jq
 ```
@@ -282,7 +282,7 @@ curl -X POST "http://localhost:8002/transactions/borrower-signature" \
   "preimage_hash_borrower": "3faa7c2aee84d26c241aa0f9a9718fde501a91c4a1f700ab37c1914f993242e3",
   "borrower_timelock": 100,
   "collateral_amount": 0.01,
-  "origination_fee": 0.001
+  "origination_fee": 0.0001
 }
 ```
 
@@ -363,4 +363,19 @@ curl -X POST "http://localhost:8001/vaultero/leaf-scripts-output-0" \
 curl -X POST "http://localhost:8001/transactions/collateral" \
   -H "Content-Type: application/json" \
   -d '{"loan_id": "test", "escrow_txid": "your_txid", "escrow_vout": 0, "borrower_pubkey": "your_key", "lender_pubkey": "your_key", "preimage_hash_lender": "your_hash", "lender_timelock": 144, "collateral_amount": "0.001", "origination_fee": "0.0001"}' | python3 -m json.tool > my-example.json
+```
+
+
+
+# For completing the witneee
+
+```bash
+curl -X POST http://localhost:8001/transactions/complete-witness \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signature_file_path": "/tmp/test_signature.json",
+    "lender_private_key": "cMrC8dGmStj3pz7mbY3vjwhXYcQwkcaWwV4QFCTF25WwVW1TCDkJ",
+    "preimage": "0x1234567890abcdef",
+    "mine_block": true
+  }'
 ```

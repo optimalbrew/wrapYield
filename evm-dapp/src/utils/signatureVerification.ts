@@ -29,25 +29,23 @@ export interface VerificationResponse {
 }
 
 /**
- * Verify a borrower's signature using the Python API
+ * Verify a borrower's signature using the Backend API (which proxies to Python API)
  */
 export async function verifyBorrowerSignature(
   signatureData: SignatureData,
   borrowerPubkey: string,
-  apiUrl: string = 'http://localhost:8001'
+  apiUrl: string = 'http://localhost:3002'
 ): Promise<VerificationResponse> {
-  const request: VerificationRequest = {
-    signature_data: signatureData,
-    borrower_pubkey: borrowerPubkey
-  };
-
   try {
-    const response = await fetch(`${apiUrl}/transactions/verify-signature`, {
+    const response = await fetch(`${apiUrl}/api/signature-verification/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify({
+        signatureData,
+        borrowerPubkey
+      }),
     });
 
     if (!response.ok) {
@@ -63,7 +61,8 @@ export async function verifyBorrowerSignature(
 }
 
 /**
- * Generate a borrower signature using the Python API
+ * Generate a borrower signature using the Backend API (which proxies to Python API)
+ * Note: This function is not currently used in the frontend
  */
 export async function generateBorrowerSignature(
   loanData: {
@@ -80,15 +79,15 @@ export async function generateBorrowerSignature(
     origination_fee: string;
     borrower_private_key: string;
   },
-  apiUrl: string = 'http://localhost:8001'
+  apiUrl: string = 'http://localhost:3002'
 ): Promise<{ signature_file_path: string }> {
   try {
-    const response = await fetch(`${apiUrl}/transactions/borrower-signature`, {
+    const response = await fetch(`${apiUrl}/api/signature-verification/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(loanData),
+      body: JSON.stringify({ loanData }),
     });
 
     if (!response.ok) {

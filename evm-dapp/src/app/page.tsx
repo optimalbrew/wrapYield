@@ -346,7 +346,7 @@ function App() {
                   <div className="flex justify-between">
                     <span className="text-blue-700">BTC Escrow:</span>
                     <span className="font-mono text-blue-800">
-                      {timelockBtcEscrow ? `${Number(timelockBtcEscrow)} blocks` : 'Loading...'}
+                      {timelockBtcEscrow ? `${Math.floor(Number(timelockBtcEscrow) / 20)} Bitcoin blocks` : 'Loading...'}
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -358,11 +358,11 @@ function App() {
                   <div className="flex justify-between">
                     <span className="text-blue-700">BTC Collateral:</span>
                     <span className="font-mono text-blue-800">
-                      {timelockBtcCollateral ? `${Number(timelockBtcCollateral)} blocks` : 'Loading...'}
+                      {timelockBtcCollateral ? `${Math.floor(Number(timelockBtcCollateral) / 20)} Bitcoin blocks` : 'Loading...'}
                     </span>
                   </div>
-                  <p className="text-blue-700">All block numbers refer to Rootstock blocks. 
-                    For BTC escrow and BTC collateral P2TR scripts, the relative timelocks are implemented (OP_CSV) using a ratio of 1:20.
+                  <p className="text-blue-700">Loan Request and Repayment Accept timelocks are in Rootstock blocks. 
+                    BTC Escrow and BTC Collateral timelocks are shown in Bitcoin blocks (converted from Rootstock using 1:20 ratio).
                   </p>
                 </div>
               </div>

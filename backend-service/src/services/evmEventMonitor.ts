@@ -1,7 +1,7 @@
 import { ethers } from 'ethers'
 import { eq } from 'drizzle-orm'
 import databaseService from './databaseService'
-import { loans, users } from '../db/schema'
+import { loans, users, borrowerSignatures } from '../db/schema'
 import fs from 'fs'
 import path from 'path'
 
@@ -478,19 +478,23 @@ class EVMEventMonitor {
         }
 
         // Check if loan already exists to prevent duplicates
-        const existingLoan = await db.select().from(loans).where(eq(loans.evmContractId, loanId.toString())).limit(1)
+        const existingLoan = await db.select().from(loans).where(eq(loans.loanReqId, loanId.toString())).limit(1)
         
         if (existingLoan.length > 0) {
           console.log(`⚠️  Loan ${loanId} already exists, skipping insertion`)
           return
         }
 
+        // Get contract parameters
+        const contractParams = await this.getContractParameters()
+        console.log(`📋 Contract parameters:`, contractParams)
+
         // Insert loan record with complete data from contract
         await db.insert(loans).values({
-          evmContractId: loanId.toString(),
+          loanReqId: loanId.toString(),
           borrowerId: borrowerUser.id,
           amount: amount,
-          durationBlocks: 100, // Default duration
+          durationBlocks: contractParams.loanDuration,
           status: 'requested',
           borrowerBtcPubkey: loanData[1], // borrowerBtcPubkey
           preimageHashBorrower: loanData[5], // preimageHashBorrower
@@ -498,10 +502,10 @@ class EVMEventMonitor {
           btcVout: Number(loanData[8]), // vout_p2tr0
           btcAddress: btcAddress,
           preimageHashLender: loanData[6], // preimageHashLender
-          timelockLoanReq: 100,
-          timelockBtcEscrow: 100,
-          timelockRepaymentAccept: 100,
-          timelockBtcCollateral: 100,
+          timelockLoanReq: contractParams.timelockLoanReq,
+          timelockBtcEscrow: contractParams.timelockBtcEscrow,
+          timelockRepaymentAccept: contractParams.timelockRepaymentAccept,
+          timelockBtcCollateral: contractParams.timelockBtcCollateral,
           requestBlockHeight: event.blockNumber,
           offerBlockHeight: loanData[9] ? Number(loanData[9]) : null, // offerBlockheight
           activationBlockHeight: loanData[10] ? Number(loanData[10]) : null, // activationBlockheight
@@ -533,18 +537,50 @@ class EVMEventMonitor {
     console.log(`   Lender: ${lenderAddress}`)
     console.log(`   Preimage Hash: ${preimageHashLender}`)
     
-    // Update loan with lender preimage hash
+    // Update loan with lender preimage hash and BTC pubkey
     const db = databaseService.getDatabase()
     if (db) {
       try {
+        // Get lender's BTC pubkey from the contract
+        console.log(`🔍 Querying contract for lender BTC pubkey...`)
+        const contract = new ethers.Contract(
+          process.env.CONTRACT_ADDRESS || '0x02b8aFd8146b7Bc6BD4F02782c18bd4649Be1605',
+          BTC_COLLATERAL_LOAN_ABI,
+          this.provider
+        )
+        
+        const lenderBtcPubkey = await contract.lenderBtcPubkey()
+        console.log(`   Lender BTC Pubkey from contract: ${lenderBtcPubkey}`)
+        
         await db.update(loans)
           .set({
             preimageHashLender: preimageHashLender,
+            lenderBtcPubkey: lenderBtcPubkey,
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
-        console.log(`✅ Loan ${loanId} updated with lender preimage hash`)
+        console.log(`✅ Loan ${loanId} updated with lender preimage hash and BTC pubkey from contract`)
+        
+        // Now calculate and store the escrow and collateral addresses
+        console.log(`🏠 Calculating addresses for loan ${loanId}...`)
+        const addresses = await this.calculateLoanAddresses(loanId, db)
+        if (addresses.escrowAddress || addresses.collateralAddress) {
+          await db.update(loans)
+            .set({
+              escrowAddress: addresses.escrowAddress,
+              collateralAddress: addresses.collateralAddress,
+              updatedAt: new Date()
+            })
+            .where(eq(loans.loanReqId, loanId.toString()))
+          
+          console.log(`✅ Loan ${loanId} addresses updated:`, {
+            escrowAddress: addresses.escrowAddress,
+            collateralAddress: addresses.collateralAddress
+          })
+        } else {
+          console.log(`⚠️ Could not calculate addresses for loan ${loanId} - missing required data`)
+        }
       } catch (error) {
         console.error('❌ Error updating lender preimage hash:', error)
       }
@@ -568,7 +604,7 @@ class EVMEventMonitor {
     if (db) {
       try {
         // Find the loan
-        const existingLoans = await db.select().from(loans).where(eq(loans.evmContractId, loanId.toString())).limit(1)
+        const existingLoans = await db.select().from(loans).where(eq(loans.loanReqId, loanId.toString())).limit(1)
         if (existingLoans.length > 0) {
           // Get or create lender user
           let lenderUser
@@ -594,7 +630,7 @@ class EVMEventMonitor {
               offerBlockHeight: event.blockNumber,
               updatedAt: new Date()
             })
-            .where(eq(loans.evmContractId, loanId.toString()))
+            .where(eq(loans.loanReqId, loanId.toString()))
           
           console.log(`✅ Loan ${loanId} updated with offer`)
         }
@@ -618,6 +654,7 @@ class EVMEventMonitor {
     const db = databaseService.getDatabase()
     if (db) {
       try {
+        // First, update the basic loan status and preimage
         await db.update(loans)
           .set({
             status: 'active',
@@ -625,12 +662,191 @@ class EVMEventMonitor {
             preimageBorrower: preimageBorrower,
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} activated with preimage stored`)
+        
+        // Note: Addresses should already be calculated and stored when lender associated preimage hash
+        // Now complete the witness transaction
+        await this.completeWitnessTransaction(loanId, preimageBorrower, db)
+        
       } catch (error) {
         console.error('❌ Error activating loan:', error)
       }
+    }
+  }
+
+  private async calculateLoanAddresses(loanId: string, db: any): Promise<{escrowAddress?: string | undefined, collateralAddress?: string | undefined}> {
+    try {
+      console.log(`🏠 Calculating addresses for loan ${loanId}...`)
+
+      // Get loan details from database
+      const loanRecord = await db.select()
+        .from(loans)
+        .where(eq(loans.loanReqId, loanId))
+        .limit(1)
+
+      console.log(`🔍 Debug - Database query result for loan ${loanId}:`, {
+        recordCount: loanRecord.length,
+        records: loanRecord
+      })
+
+      if (loanRecord.length === 0) {
+        console.log(`⚠️ No loan record found for loan ${loanId}`)
+        return {}
+      }
+
+      const loan = loanRecord[0]
+      console.log(`🔍 Debug - Raw loan data from DB:`, {
+        borrowerBtcPubkey: loan.borrowerBtcPubkey,
+        lenderBtcPubkey: loan.lenderBtcPubkey,
+        preimageHashBorrower: loan.preimageHashBorrower,
+        preimageHashLender: loan.preimageHashLender,
+        timelockBtcEscrow: loan.timelockBtcEscrow,
+        timelockBtcCollateral: loan.timelockBtcCollateral
+      })
+
+      // Check if we have all required data
+      if (!loan.borrowerBtcPubkey || !loan.lenderBtcPubkey || !loan.preimageHashBorrower || !loan.preimageHashLender) {
+        console.log(`⚠️ Missing required data for address calculation:`, {
+          borrowerBtcPubkey: !!loan.borrowerBtcPubkey,
+          lenderBtcPubkey: !!loan.lenderBtcPubkey,
+          preimageHashBorrower: !!loan.preimageHashBorrower,
+          preimageHashLender: !!loan.preimageHashLender
+        })
+        return {}
+      }
+      
+      const pythonApiUrl = process.env.PYTHON_API_URL || 'http://localhost:8001'
+      
+      // Debug: Log the preimage hashes before sending
+      console.log(`🔍 Debug - Preimage hashes before processing:`, {
+        preimageHashBorrower: loan.preimageHashBorrower,
+        preimageHashLender: loan.preimageHashLender,
+        borrowerBtcPubkey: loan.borrowerBtcPubkey,
+        lenderBtcPubkey: loan.lenderBtcPubkey
+      })
+      
+      // Calculate escrow address (nums_p2tr_addr_0)
+      const escrowResponse = await fetch(`${pythonApiUrl}/vaultero/nums-p2tr-addr-0`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          borrower_pubkey: loan.borrowerBtcPubkey,
+          lender_pubkey: loan.lenderBtcPubkey,
+          preimage_hash_borrower: loan.preimageHashBorrower?.replace('0x', ''),
+          borrower_timelock: Math.floor(loan.timelockBtcEscrow / 20)
+        }),
+      })
+      
+      let escrowAddress: string | undefined
+      if (escrowResponse.ok) {
+        const escrowResult = await escrowResponse.json() as { nums_p2tr_addr: string }
+        escrowAddress = escrowResult.nums_p2tr_addr
+        console.log(`✅ Escrow address calculated: ${escrowAddress}`)
+      } else {
+        console.error(`❌ Failed to calculate escrow address: ${escrowResponse.status}`)
+      }
+      
+      // Calculate collateral address (nums_p2tr_addr_1)
+      const collateralResponse = await fetch(`${pythonApiUrl}/vaultero/nums-p2tr-addr-1`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          borrower_pubkey: loan.borrowerBtcPubkey,
+          lender_pubkey: loan.lenderBtcPubkey,
+          preimage_hash_lender: loan.preimageHashLender?.replace('0x', ''),
+          lender_timelock: Math.floor(loan.timelockBtcCollateral / 20)
+        }),
+      })
+      
+      let collateralAddress: string | undefined
+      if (collateralResponse.ok) {
+        const collateralResult = await collateralResponse.json() as { nums_p2tr_addr: string }
+        collateralAddress = collateralResult.nums_p2tr_addr
+        console.log(`✅ Collateral address calculated: ${collateralAddress}`)
+      } else {
+        console.error(`❌ Failed to calculate collateral address: ${collateralResponse.status}`)
+      }
+      
+      return { escrowAddress, collateralAddress }
+      
+    } catch (error) {
+      console.error('❌ Error calculating loan addresses:', error)
+      return {}
+    }
+  }
+
+  private async completeWitnessTransaction(loanId: string, preimageBorrower: string, db: any) {
+    try {
+      console.log(`🔄 Completing witness transaction for loan ${loanId}...`)
+      
+      // Get the borrower signature from the database
+      const borrowerSignatureRecord = await db.select()
+        .from(borrowerSignatures)
+        .where(eq(borrowerSignatures.loanId, loanId))
+        .limit(1)
+      
+      if (borrowerSignatureRecord.length === 0) {
+        console.log(`⚠️ No borrower signature found for loan ${loanId}`)
+        return
+      }
+      
+      const signatureData = borrowerSignatureRecord[0].signatureData
+      
+      // Get loan details for additional context
+      const loanRecord = await db.select()
+        .from(loans)
+        .where(eq(loans.loanReqId, loanId))
+        .limit(1)
+      
+      if (loanRecord.length === 0) {
+        console.log(`⚠️ No loan record found for loan ${loanId}`)
+        return
+      }
+      
+      const loan = loanRecord[0]
+      
+      // Call the complete_witness endpoint
+      const backendUrl = process.env.BACKEND_URL || 'http://localhost:3002'
+      const response = await fetch(`${backendUrl}/api/signature-verification/complete-witness`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          loanId: loanId,
+          borrowerSignature: signatureData,
+          borrowerPreimage: preimageBorrower
+        }),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Complete witness failed: ${response.status}`)
+      }
+      
+      const result = await response.json() as any
+      
+      if (result.success && result.data && result.data.txid) {
+        // Update the loan with the Bitcoin transaction ID
+        await db.update(loans)
+          .set({
+            collateralCommitTx: result.data.txid,
+            updatedAt: new Date()
+          })
+          .where(eq(loans.loanReqId, loanId))
+        
+        console.log(`✅ Witness transaction completed for loan ${loanId}, TXID: ${result.data.txid}`)
+      } else {
+        console.log(`⚠️ Complete witness failed for loan ${loanId}:`, result.message)
+      }
+      
+    } catch (error) {
+      console.error(`❌ Error completing witness transaction for loan ${loanId}:`, error)
     }
   }
 
@@ -651,7 +867,7 @@ class EVMEventMonitor {
             status: 'refunded_to_lender',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} refunded to lender`)
       } catch (error) {
@@ -679,7 +895,7 @@ class EVMEventMonitor {
             status: 'repayment_attempted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} repayment attempted`)
       } catch (error) {
@@ -709,7 +925,7 @@ class EVMEventMonitor {
             preimageLender: preimageLender,
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} repayment accepted with preimage stored`)
       } catch (error) {
@@ -737,7 +953,7 @@ class EVMEventMonitor {
             status: 'repayment_refunded_with_bond',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} repayment refunded with bond`)
       } catch (error) {
@@ -781,7 +997,7 @@ class EVMEventMonitor {
             status: 'defaulted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} defaulted`)
       } catch (error) {
@@ -807,7 +1023,7 @@ class EVMEventMonitor {
             status: 'deleted',
             updatedAt: new Date()
           })
-          .where(eq(loans.evmContractId, loanId.toString()))
+          .where(eq(loans.loanReqId, loanId.toString()))
         
         console.log(`✅ Loan ${loanId} deleted`)
       } catch (error) {
@@ -870,7 +1086,7 @@ class EVMEventMonitor {
               repaymentBlockHeight: loanData[11] ? Number(loanData[11]) : null, // repaymentBlockheight
               updatedAt: new Date()
             })
-            .where(eq(loans.evmContractId, i.toString()))
+            .where(eq(loans.loanReqId, i.toString()))
           
           console.log(`✅ Synced loan ${i}`)
         } catch (error) {
@@ -887,6 +1103,44 @@ class EVMEventMonitor {
     }
   }
 
+  /**
+   * Read contract parameters from the blockchain
+   */
+  private async getContractParameters() {
+    try {
+      const [
+        loanDuration,
+        timelockLoanReq,
+        timelockBtcEscrow,
+        timelockRepaymentAccept,
+        timelockBtcCollateral
+      ] = await Promise.all([
+        this.contract.loanDuration(),
+        this.contract.timelockLoanReq(),
+        this.contract.timelockBtcEscrow(),
+        this.contract.timelockRepaymentAccept(),
+        this.contract.timelockBtcCollateral()
+      ])
+
+      return {
+        loanDuration: Number(loanDuration),
+        timelockLoanReq: Number(timelockLoanReq),
+        timelockBtcEscrow: Number(timelockBtcEscrow),
+        timelockRepaymentAccept: Number(timelockRepaymentAccept),
+        timelockBtcCollateral: Number(timelockBtcCollateral)
+      }
+    } catch (error) {
+      console.error('❌ Error reading contract parameters:', error)
+      // Return default values if contract read fails
+      return {
+        loanDuration: 100,
+        timelockLoanReq: 100,
+        timelockBtcEscrow: 100,
+        timelockRepaymentAccept: 100,
+        timelockBtcCollateral: 100
+      }
+    }
+  }
 
   private clearOldProcessedEvents() {
     // Keep only the last 1000 processed events to prevent memory buildup

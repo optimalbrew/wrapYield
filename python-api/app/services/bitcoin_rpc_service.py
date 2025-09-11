@@ -6,6 +6,7 @@ Handles interaction with local Bitcoin Core node for:
 - Checking confirmations 
 - Generating blocks (regtest)
 - Querying blockchain state
+- UTXO tracking and monitoring for loan lifecycle
 """
 
 from bitcoinrpc.authproxy import AuthServiceProxy, JSONRPCException
@@ -391,6 +392,174 @@ class BitcoinRPCService:
         except Exception as e:
             logger.error(f"Error funding address {address}: {e}")
             raise Exception(f"Failed to fund address: {e}")
+
+    def is_utxo_spent(self, txid: str, vout: int) -> bool:
+        """
+        Check if a specific UTXO is still unspent. This makes more sense assuming we know for 
+        sure that such a UTXO exists or existed at some point in the past. If it exists, 
+        then it is not spent.
+        
+        Args:
+            txid: Transaction ID
+            vout: Output index
+            
+        Returns:
+            True if UTXO is spent (no longer exists), False if still unspent
+        """
+        try:
+            result = self.rpc.gettxout(txid, vout)
+            return result is None  # None means spent
+        except JSONRPCException as e:
+            logger.warning(f"Error checking UTXO {txid}:{vout}: {e}")
+            return True  # Assume spent if we can't check
+        except Exception as e:
+            logger.error(f"Unexpected error checking UTXO {txid}:{vout}: {e}")
+            return True
+
+    def get_utxo_details(self, txid: str, vout: int) -> Optional[Dict]:
+        """
+        Get detailed information about a UTXO.
+        
+        Args:
+            txid: Transaction ID
+            vout: Output index
+            
+        Returns:
+            Dictionary with UTXO details or None if not found/spent
+        """
+        try:
+            result = self.rpc.gettxout(txid, vout)
+            return result
+        except JSONRPCException as e:
+            logger.warning(f"Error getting UTXO details {txid}:{vout}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting UTXO details {txid}:{vout}: {e}")
+            return None
+
+    def get_all_utxos(self, min_confirmations: int = 0, max_confirmations: int = 9999999) -> List[Dict]:
+        """
+        Get all UTXOs in the wallet.
+        
+        Args:
+            min_confirmations: Minimum confirmations required
+            max_confirmations: Maximum confirmations allowed
+            
+        Returns:
+            List of UTXO dictionaries
+        """
+        try:
+            result = self.rpc.listunspent(min_confirmations, max_confirmations, [], True)
+            return result
+        except JSONRPCException as e:
+            logger.error(f"Error getting UTXOs: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error getting UTXOs: {e}")
+            return []
+
+    def find_utxos_by_address(self, address: str) -> List[Dict]:
+        """
+        Find UTXOs for a specific address.
+        
+        Args:
+            address: Bitcoin address to search for
+            
+        Returns:
+            List of UTXOs for the given address
+        """
+        try:
+            all_utxos = self.get_all_utxos()
+            return [utxo for utxo in all_utxos if utxo.get("address") == address]
+        except Exception as e:
+            logger.error(f"Error finding UTXOs for address {address}: {e}")
+            return []
+
+    def get_utxo_confirmations(self, txid: str, vout: int) -> int:
+        """
+        Get the number of confirmations for a specific UTXO.
+        
+        Args:
+            txid: Transaction ID
+            vout: Output index
+            
+        Returns:
+            Number of confirmations, 0 if not found/spent
+        """
+        try:
+            utxo_info = self.get_utxo_details(txid, vout)
+            if utxo_info:
+                return utxo_info.get("confirmations", 0)
+            return 0
+        except Exception as e:
+            logger.error(f"Error getting confirmations for UTXO {txid}:{vout}: {e}")
+            return 0
+
+    def monitor_utxo_status(self, txid: str, vout: int, callback=None) -> Dict:
+        """
+        Monitor a specific UTXO and return its current status.
+        This is a one-time check, not continuous monitoring.
+        
+        Args:
+            txid: Transaction ID
+            vout: Output index
+            callback: Optional callback function to call with status update
+            
+        Returns:
+            Dictionary with UTXO status information
+        """
+        try:
+            is_spent = self.is_utxo_spent(txid, vout)
+            utxo_details = self.get_utxo_details(txid, vout)
+            
+            status = {
+                "txid": txid,
+                "vout": vout,
+                "is_spent": is_spent,
+                "confirmations": utxo_details.get("confirmations", 0) if utxo_details else 0,
+                "value": utxo_details.get("value", 0) if utxo_details else 0,
+                "address": utxo_details.get("scriptPubKey", {}).get("address") if utxo_details else None,
+                "timestamp": utxo_details.get("time", 0) if utxo_details else 0
+            }
+            
+            if callback:
+                callback(status)
+                
+            return status
+            
+        except Exception as e:
+            logger.error(f"Error monitoring UTXO {txid}:{vout}: {e}")
+            return {
+                "txid": txid,
+                "vout": vout,
+                "is_spent": True,  # Assume spent on error
+                "confirmations": 0,
+                "value": 0,
+                "address": None,
+                "timestamp": 0,
+                "error": str(e)
+            }
+
+    def get_transaction_details(self, txid: str) -> Optional[Dict]:
+        """
+        Get detailed information about a transaction.
+        
+        Args:
+            txid: Transaction ID
+            
+        Returns:
+            Dictionary with transaction details or None if not found
+        """
+        try:
+            result = self.rpc.gettransaction(txid)
+            return result
+        except JSONRPCException as e:
+            logger.warning(f"Error getting transaction details {txid}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting transaction details {txid}: {e}")
+            return None
+
 
 # Global service instance
 bitcoin_rpc = BitcoinRPCService()

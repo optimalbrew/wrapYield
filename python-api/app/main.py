@@ -128,6 +128,15 @@ async def root():
                 "broadcast": "POST /bitcoin/broadcast",
                 "transaction": "GET /bitcoin/transaction/{txid}",
                 "confirmations": "GET /bitcoin/confirmations/{txid}"
+            },
+            "utxo": {
+                "status": "GET /utxo/{txid}/{vout}/status",
+                "spent": "GET /utxo/{txid}/{vout}/spent",
+                "details": "GET /utxo/{txid}/{vout}/details",
+                "confirmations": "GET /utxo/{txid}/{vout}/confirmations",
+                "all": "GET /utxo/all",
+                "by_address": "GET /utxo/address/{address}",
+                "transaction_details": "GET /transaction/{txid}/details"
             }
 
         }
@@ -880,6 +889,193 @@ async def fund_address(request: FundAddressRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fund address: {str(e)}"
+        )
+
+# UTXO Tracking endpoints for loan lifecycle monitoring
+@app.get("/utxo/{txid}/{vout}/status", response_model=APIResponse)
+async def get_utxo_status(txid: str, vout: int):
+    """
+    Get the current status of a specific UTXO.
+    
+    Returns information about whether the UTXO is spent, confirmations, value, etc.
+    """
+    try:
+        status = bitcoin_rpc.monitor_utxo_status(txid, vout)
+        
+        return APIResponse(
+            success=True,
+            data=status,
+            message=f"UTXO {txid}:{vout} status retrieved"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting UTXO status {txid}:{vout}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get UTXO status: {str(e)}"
+        )
+
+@app.get("/utxo/{txid}/{vout}/spent", response_model=APIResponse)
+async def check_utxo_spent(txid: str, vout: int):
+    """
+    Check if a specific UTXO is spent.
+    
+    Returns a simple boolean indicating if the UTXO is spent.
+    """
+    try:
+        is_spent = bitcoin_rpc.is_utxo_spent(txid, vout)
+        
+        return APIResponse(
+            success=True,
+            data={"is_spent": is_spent, "txid": txid, "vout": vout},
+            message=f"UTXO {txid}:{vout} spent status: {is_spent}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error checking UTXO spent status {txid}:{vout}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check UTXO spent status: {str(e)}"
+        )
+
+@app.get("/utxo/{txid}/{vout}/details", response_model=APIResponse)
+async def get_utxo_details(txid: str, vout: int):
+    """
+    Get detailed information about a specific UTXO.
+    
+    Returns full UTXO details including value, address, confirmations, etc.
+    """
+    try:
+        details = bitcoin_rpc.get_utxo_details(txid, vout)
+        
+        if details is None:
+            return APIResponse(
+                success=True,
+                data={"utxo": None, "txid": txid, "vout": vout},
+                message=f"UTXO {txid}:{vout} not found or spent"
+            )
+        
+        return APIResponse(
+            success=True,
+            data={"utxo": details, "txid": txid, "vout": vout},
+            message=f"UTXO {txid}:{vout} details retrieved"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting UTXO details {txid}:{vout}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get UTXO details: {str(e)}"
+        )
+
+@app.get("/utxo/{txid}/{vout}/confirmations", response_model=APIResponse)
+async def get_utxo_confirmations(txid: str, vout: int):
+    """
+    Get the number of confirmations for a specific UTXO.
+    
+    Returns the confirmation count for the UTXO.
+    """
+    try:
+        confirmations = bitcoin_rpc.get_utxo_confirmations(txid, vout)
+        
+        return APIResponse(
+            success=True,
+            data={"confirmations": confirmations, "txid": txid, "vout": vout},
+            message=f"UTXO {txid}:{vout} has {confirmations} confirmations"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting UTXO confirmations {txid}:{vout}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get UTXO confirmations: {str(e)}"
+        )
+
+@app.get("/utxo/all", response_model=APIResponse)
+async def get_all_utxos(min_confirmations: int = 0, max_confirmations: int = 9999999):
+    """
+    Get all UTXOs in the wallet.
+    
+    Query parameters:
+    - min_confirmations: Minimum confirmations required (default: 0)
+    - max_confirmations: Maximum confirmations allowed (default: 9999999)
+    """
+    try:
+        utxos = bitcoin_rpc.get_all_utxos(min_confirmations, max_confirmations)
+        
+        return APIResponse(
+            success=True,
+            data={
+                "utxos": utxos,
+                "count": len(utxos),
+                "min_confirmations": min_confirmations,
+                "max_confirmations": max_confirmations
+            },
+            message=f"Retrieved {len(utxos)} UTXOs"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting all UTXOs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get UTXOs: {str(e)}"
+        )
+
+@app.get("/utxo/address/{address}", response_model=APIResponse)
+async def get_utxos_by_address(address: str):
+    """
+    Get all UTXOs for a specific Bitcoin address.
+    
+    Returns all UTXOs associated with the given address.
+    """
+    try:
+        utxos = bitcoin_rpc.find_utxos_by_address(address)
+        
+        return APIResponse(
+            success=True,
+            data={
+                "utxos": utxos,
+                "count": len(utxos),
+                "address": address
+            },
+            message=f"Retrieved {len(utxos)} UTXOs for address {address}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting UTXOs for address {address}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get UTXOs for address: {str(e)}"
+        )
+
+@app.get("/transaction/{txid}/details", response_model=APIResponse)
+async def get_transaction_details(txid: str):
+    """
+    Get detailed information about a transaction.
+    
+    Returns full transaction details including inputs, outputs, fees, etc.
+    """
+    try:
+        details = bitcoin_rpc.get_transaction_details(txid)
+        
+        if details is None:
+            return APIResponse(
+                success=True,
+                data={"transaction": None, "txid": txid},
+                message=f"Transaction {txid} not found"
+            )
+        
+        return APIResponse(
+            success=True,
+            data={"transaction": details, "txid": txid},
+            message=f"Transaction {txid} details retrieved"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting transaction details {txid}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get transaction details: {str(e)}"
         )
 
 # Regtest-specific endpoints for testing

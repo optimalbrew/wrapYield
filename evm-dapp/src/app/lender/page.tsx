@@ -182,6 +182,7 @@ export default function LenderPage() {
   // Signature verification state
   const [signatureData, setSignatureData] = useState<SignatureData | undefined>(undefined)
   const [showSignatureVerification, setShowSignatureVerification] = useState(false)
+  
 
   // Get loan details for bond calculation
   const { data: loanDetails, refetch: refetchLoanDetails } = useReadContract({
@@ -235,6 +236,7 @@ export default function LenderPage() {
       console.log('⚙️ Update Parameters Transaction Hash:', updateParamsHash)
     }
   }, [extendOfferHash, acceptRepaymentHash, markAsDefaultedHash, updatePubkeyHash, updateParamsHash, selectedLoanId, loanDetails])
+
 
   // Refetch loan details when selectedLoanId changes
   useEffect(() => {
@@ -642,10 +644,10 @@ export default function LenderPage() {
             <div className="text-sm text-gray-700 mb-2">
               Status: <span className="font-medium text-blue-600">
                 {account.addresses && account.addresses.length > 0 ? 'Connected' :
-                 account.status === 'connected' || account.status === 'success' ? 'Connected' :
+                 account.status === 'connected' ? 'Connected' :
                  account.status === 'connecting' ? 'Connecting...' :
+                 account.status === 'reconnecting' ? 'Reconnecting...' :
                  account.status === 'disconnected' ? 'Disconnected' :
-                 account.status === 'idle' ? 'Not Connected' : 
                  'Not Connected'}
               </span>
             </div>
@@ -732,22 +734,13 @@ export default function LenderPage() {
               </div>
             </div>
 
-            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="text-sm text-gray-700">
-                <div className="font-medium mb-2">ℹ️ About Data Sync</div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <div>• The system automatically syncs loan data from the blockchain</div>
-                  <div>• Sync is triggered when new loan events are detected</div>
-                  <div>• Last sync time shows when the database was last updated</div>
-                  <div>• Event monitoring ensures real-time data accuracy</div>
-                </div>
-                <button
-                  onClick={fetchSyncStatus}
-                  className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                >
-                  🔄 Refresh Status
-                </button>
-              </div>
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={fetchSyncStatus}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              >
+                🔄 Refresh Status
+              </button>
             </div>
           </div>
         )}
@@ -850,7 +843,7 @@ export default function LenderPage() {
                   
                   {loanDetails ? (
                     <div className="space-y-2 text-sm">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <div className="font-medium text-blue-700 mb-2">Basic Information</div>
                           <div className="space-y-1 text-xs text-blue-600">
@@ -876,7 +869,7 @@ export default function LenderPage() {
                           <div className="font-medium text-blue-700 mb-2">Bitcoin Transaction</div>
                           <div className="space-y-1 text-xs text-blue-600">
                             <div>Transaction ID: <code className="bg-blue-100 px-1 rounded">{loanDetails.txid_p2tr0 || 'N/A'}</code></div>
-                            <div>Output Index: <code className="bg-blue-100 px-1 rounded">{loanDetails.vout_p2tr0 || 'N/A'}</code></div>
+                            <div>Output Index: <code className="bg-blue-100 px-1 rounded">{loanDetails.vout_p2tr0 !== undefined ? loanDetails.vout_p2tr0 : 'N/A'}</code></div>
                           </div>
                         </div>
                       </div>
@@ -928,54 +921,7 @@ export default function LenderPage() {
                 </div>
               )}
 
-              {/* Contract Constants */}
-              <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-                <h4 className="font-medium text-purple-800 mb-2">⚙️ Contract Constants</h4>
-                <div className="text-xs text-purple-700 space-y-1">
-                  <div>Contract Address: <code className="bg-purple-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
-                  <div>Network: <code className="bg-purple-100 px-1 rounded">{account.chainId === NETWORK_CONFIG.ANVIL.chainId ? `Anvil (${NETWORK_CONFIG.ANVIL.chainId})` : `Chain ID: ${account.chainId}`}</code></div>
-                  <div>Wallet Connected: <code className="bg-purple-100 px-1 rounded">{account.status === 'connected' ? '✅ Yes' : '❌ No'}</code></div>
-                  <div>Total Loans: <code className="bg-purple-100 px-1 rounded">{totalLoans !== undefined ? Number(totalLoans) : 'Loading...'}</code></div>
-                  <div>Account Nonce: <code className="bg-purple-100 px-1 rounded">{accountNonce !== null ? accountNonce : 'Click Refresh'}</code></div>
-                </div>
-                <button
-                  onClick={async () => {
-                    const nonce = await checkAndSyncNonce()
-                    if (nonce !== null && nonce !== false) {
-                      setAccountNonce(nonce)
-                      console.log('✅ Nonce refreshed:', nonce)
-                    }
-                  }}
-                  className="mt-2 px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white text-xs rounded transition-colors"
-                >
-                  🔄 Refresh Nonce
-                </button>
-              </div>
 
-              {/* Debug Information */}
-              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <h4 className="font-medium text-yellow-800 mb-2">🔍 Debug Information</h4>
-                <div className="text-xs text-yellow-700 space-y-1">
-                  <div>Selected Loan ID: <code className="bg-blue-100 px-1 rounded">{selectedLoanId}</code></div>
-                  <div>Loan Details: {loanDetails ? '✅ Loaded' : '❌ Not loaded'}</div>
-                  {loanDetails && (
-                    <>
-                      <div>Data Type: <code className="bg-yellow-100 px-1 rounded">{typeof loanDetails}</code></div>
-                      <div>Is Array: <code className="bg-yellow-100 px-1 rounded">{Array.isArray(loanDetails) ? 'Yes' : 'No'}</code></div>
-                      <div>Length: <code className="bg-yellow-100 px-1 rounded">{Array.isArray(loanDetails) ? loanDetails.length : 'N/A'}</code></div>
-                      <div>Raw Data: <code className="bg-yellow-100 px-1 rounded text-xs break-all">{serializeLoanDetails(loanDetails)}</code></div>
-                    </>
-                  )}
-                  {loanDetails && loanDetails.amount && (
-                    <>
-                      <div>Loan Amount: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount))} rBTC</code></div>
-                      <div>Calculated Bond: <code className="bg-yellow-100 px-1 rounded">{formatEther((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100))} rBTC</code> (10%)</div>
-                      <div>Amount to Send: <code className="bg-yellow-100 px-1 rounded">{formatEther(BigInt(loanDetails.amount) + ((BigInt(loanDetails.amount) * BigInt(CONTRACT_CONFIG.LENDER_BOND_PERCENTAGE)) / BigInt(100)))} rBTC</code> (loan + bond)</div>
-                    </>
-                  )}
-                  <div>Contract Address: <code className="bg-blue-100 px-1 rounded">{CONTRACTS.BTC_COLLATERAL_LOAN}</code></div>
-                </div>
-              </div>
 
               {/* Associate Preimage Hash Section */}
               {loanDetails && loanDetails.status === 0 && ( // LoanStatus.Requested = 0
@@ -1054,32 +1000,6 @@ export default function LenderPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button
-                  onClick={handleExtendLoanOffer}
-                  disabled={offerLoading}
-                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
-                >
-                  {offerLoading ? 'Offering...' : 'Extend Loan Offer'}
-                </button>
-                <button
-                  onClick={handleAcceptRepayment}
-                  disabled={acceptRepaymentLoading || !preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000'}
-                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
-                  title={!preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000' ? 'Please provide the Lender Preimage to accept repayment' : ''}
-                >
-                  {acceptRepaymentLoading ? 'Accepting...' : 'Accept Repayment'}
-                </button>
-                <button
-                  onClick={handleMarkAsDefaulted}
-                  disabled={defaultLoading}
-                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
-                >
-                  {defaultLoading ? 'Processing...' : 'Mark as Defaulted'}
-                </button>
-              </div>
-            </div>
-
             {/* Signature Verification */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-4">
@@ -1149,6 +1069,35 @@ export default function LenderPage() {
                   />
                 </div>
               )}
+            </div>
+
+            {/* Spacing between Signature Verification and Loan Actions */}
+            <div className="mt-6"></div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button
+                  onClick={handleExtendLoanOffer}
+                  disabled={offerLoading}
+                  className="bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
+                >
+                  {offerLoading ? 'Offering...' : 'Extend Loan Offer'}
+                </button>
+                <button
+                  onClick={handleAcceptRepayment}
+                  disabled={acceptRepaymentLoading || !preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000'}
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
+                  title={!preimageLender || preimageLender === '0x0000000000000000000000000000000000000000000000000000000000000000' ? 'Please provide the Lender Preimage to accept repayment' : ''}
+                >
+                  {acceptRepaymentLoading ? 'Accepting...' : 'Accept Repayment'}
+                </button>
+                <button
+                  onClick={handleMarkAsDefaulted}
+                  disabled={defaultLoading}
+                  className="bg-red-500 hover:bg-red-600 disabled:bg-gray-400 text-white px-4 py-3 rounded-lg transition-colors font-medium"
+                >
+                  {defaultLoading ? 'Processing...' : 'Mark as Defaulted'}
+                </button>
+              </div>
             </div>
 
             {/* Update BTC Public Key */}

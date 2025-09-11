@@ -127,6 +127,16 @@ export default function BorrowerPage() {
     },
   }) as { data: any, refetch: () => void, error: Error | null }
 
+  // Get lender's BTC pubkey
+  const { data: lenderBtcPubkey, refetch: refetchLenderBtcPubkey } = useReadContract({
+    address: CONTRACTS.BTC_COLLATERAL_LOAN,
+    abi: BTC_COLLATERAL_LOAN_ABI,
+    functionName: 'lenderBtcPubkey',
+    query: {
+      enabled: !!CONTRACTS.BTC_COLLATERAL_LOAN && account.status === 'connected',
+    },
+  }) as { data: string | undefined, refetch: () => void, error: Error | null }
+
   // State for account transaction nonce
   const [accountNonce, setAccountNonce] = useState<number | null>(null)
 
@@ -136,6 +146,7 @@ export default function BorrowerPage() {
     lastSyncTimeFormatted: string
     isMonitoring: boolean
   } | null>(null)
+
 
   // Monitor transaction hashes
   useEffect(() => {
@@ -879,22 +890,13 @@ export default function BorrowerPage() {
               </div>
             </div>
 
-            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div className="text-sm text-gray-700">
-                <div className="font-medium mb-2">ℹ️ About Data Sync</div>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <div>• The system automatically syncs loan data from the blockchain</div>
-                  <div>• Sync is triggered when new loan events are detected</div>
-                  <div>• Last sync time shows when the database was last updated</div>
-                  <div>• Event monitoring ensures real-time data accuracy</div>
-                </div>
-                <button
-                  onClick={fetchSyncStatus}
-                  className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                >
-                  🔄 Refresh Status
-                </button>
-              </div>
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={fetchSyncStatus}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+              >
+                🔄 Refresh Status
+              </button>
             </div>
           </div>
         )}
@@ -919,6 +921,18 @@ export default function BorrowerPage() {
                 </button>
               </div>
             </div>
+
+            {/* Lender Information */}
+            {lenderBtcPubkey && lenderBtcPubkey !== '' && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+                <div className="text-sm text-blue-800">
+                  <div className="font-medium text-blue-900 mb-2">Lender Information</div>
+                  <div className="space-y-1">
+                    <div>Lender BTC Pubkey: <code className="bg-blue-100 px-1 rounded text-xs">{lenderBtcPubkey}</code></div>
+                  </div>
+                </div>
+              </div>
+            )}
 
           
           </div>
@@ -1026,36 +1040,6 @@ export default function BorrowerPage() {
               </div>
             )}
 
-            {/* Debug Information */}
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <h4 className="text-sm font-medium text-gray-800 mb-2">🐛 Debug Information</h4>
-              <div className="text-xs text-gray-600 space-y-1">
-                <div>Wallet Status: {account.status}</div>
-                <div>Network: {account.chainId} {account.chainId === 31337 ? '(Anvil)' : '(Wrong Network)'}</div>
-                <div>Contract Address: {CONTRACTS.BTC_COLLATERAL_LOAN || 'Not set'}</div>
-                <div>Account Address: {account.addresses?.[0] || 'Not connected'}</div>
-                <div>Total Loans Data: {totalLoans !== undefined ? Number(totalLoans) : 'Loading...'}</div>
-                <div>Contract Owner: {contractOwner || 'Loading...'}</div>
-                <div>Owner Error: {ownerError ? ownerError.message : 'None'}</div>
-                <div>Loan Error: {loanError ? loanError.message : 'None'}</div>
-              </div>
-              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                💡 <strong>Debug Tip:</strong> Open browser console (F12) to see detailed transaction logs and any errors.
-              </div>
-              <div className="mt-2">
-                <button
-                  onClick={() => {
-                    console.log('🔍 Testing contract connection...')
-                    console.log('CONTRACTS:', CONTRACTS)
-                    console.log('BTC_COLLATERAL_LOAN_ABI:', BTC_COLLATERAL_LOAN_ABI)
-                    refetchLoans()
-                  }}
-                  className="px-3 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition-colors"
-                >
-                  Test Contract Connection
-                </button>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1084,7 +1068,7 @@ export default function BorrowerPage() {
                 {borrowerLoan && (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h4 className="font-medium text-green-800 mb-3">📋 Loan Information</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
                         <div className="font-medium text-green-700 mb-2">Basic Details</div>
                         <div className="space-y-1 text-xs text-green-600">
@@ -1110,7 +1094,7 @@ export default function BorrowerPage() {
                         <div className="font-medium text-green-700 mb-2">Bitcoin Transaction</div>
                         <div className="space-y-1 text-xs text-green-600">
                           <div>Transaction ID: <code className="bg-green-100 px-1 rounded">{borrowerLoan.txid_p2tr0 || 'N/A'}</code></div>
-                          <div>Output Index: <code className="bg-green-100 px-1 rounded">{borrowerLoan.vout_p2tr0 || 'N/A'}</code></div>
+                          <div>Output Index: <code className="bg-green-100 px-1 rounded">{borrowerLoan.vout_p2tr0 !== undefined ? borrowerLoan.vout_p2tr0 : 'N/A'}</code></div>
                         </div>
                       </div>
                     </div>
@@ -1345,7 +1329,7 @@ export default function BorrowerPage() {
                       <div>Loan Amount: <code className="bg-green-100 px-1 rounded">{collateralResult.loanAmount.eth} rBTC</code></div>
                       <div>Origination Fee ({collateralResult.originationFeePercentage}%): <code className="bg-green-100 px-1 rounded">{collateralResult.originationFee.eth} rBTC</code></div>
                       <div>Total Required: <code className="bg-green-100 px-1 rounded">{collateralResult.totalAmount.eth} rBTC</code></div>
-                      <div className="font-medium">Suggested Total: <code className="bg-green-100 px-1 rounded">{collateralResult.suggestedTotal.btc} BTC</code> (+200 sats for fees)</div>
+                      <div className="font-medium">Suggested Total: <code className="bg-green-100 px-1 rounded">{collateralResult.suggestedTotal.btc} BTC</code> (+500 sats for fees)</div>
                     </div>
                   </div>
                   

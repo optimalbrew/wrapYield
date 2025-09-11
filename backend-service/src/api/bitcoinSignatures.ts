@@ -37,8 +37,8 @@ router.post('/loan/:loanId/preimage', async (req, res) => {
     // Update loan with preimage
     const result = await db.update(loans)
       .set({ preimageBorrower: preimage })
-      .where(eq(loans.evmContractId, loanId))
-      .returning({ id: loans.id, evmContractId: loans.evmContractId, preimageBorrower: loans.preimageBorrower })
+      .where(eq(loans.loanReqId, loanId))
+      .returning({ id: loans.id, loanReqId: loans.loanReqId, preimageBorrower: loans.preimageBorrower })
 
     if (result.length === 0) {
       return res.status(404).json({ success: false, error: 'Loan not found' })
@@ -64,7 +64,7 @@ router.get('/loan/:loanId/preimage', async (req, res) => {
     
     const result = await db.select({ preimageBorrower: loans.preimageBorrower })
       .from(loans)
-      .where(eq(loans.evmContractId, loanId))
+      .where(eq(loans.loanReqId, loanId))
       .limit(1)
 
     if (result.length === 0) {
