@@ -14,12 +14,13 @@ note: the scripts `start-local.sh` and `stop-local.sh` can be used to start/stop
 1. Start a local anvil (Ethereum) from any terminal. For determinstic anvil accounts and testing, I use a fixed seed 
 
 ```bash
- anvil --mnemonic-seed-unsafe 2
+anvil --mnemonic-seed-unsafe 2
 ```
 2. Deploy the smart contracts (`BtcCollateralLoan` and `EtherSwap`). Do this from the `evmchain/` directory using the 
 following script and the first anvil account's private key
 
 ```bash
+# from evmchain/ directoy
 forge script script/DeployLoanContract.sol --rpc-url http://127.0.0.1:8545 --private-key 0xd6a036f561e03196779dd34bf3d141dec4737eec5ed0416e413985ca05dad51a --broadcast
 ```
 3. Start bitcoin core in `regtest` mode. This can be done from `btc-backend` with
@@ -106,7 +107,7 @@ curl -X POST "http://localhost:8002/transactions/borrower-signature" \
   -H "Content-Type: application/json" \
   -d '{
     "loan_id": "test-loan-example-012",
-    "escrow_txid": "09e23cb9290d340b6f848c6c18308eafa311be51246ae4935ba2f17913ccb64a",
+    "escrow_txid": "5b60ee94723d06f261ae475f9145a08a086d3450045c66bb93f0b38906af476d",
     "escrow_vout": 0,
     "borrower_pubkey": "274903288d231552de4c2c270d1c3f71fe5c78315374830c3b12a6654ee03afa",
     "lender_pubkey": "64b4b84f42da9bdb84f7eda2de12524516686e73849645627fb7a034c79c81c8",
@@ -160,26 +161,34 @@ python-api directly, users should be mindful of thiking in terms of bitcoin bloc
 
 ## Database and Loan States
 
-For any given loan_id
+For any given loan_id: 
 
+```bash
+#from anywhere: using full container name
+docker exec -it btc-yield-postgres psql -U btc_yield_user -d btc_yield
+
+#from backend-service, using service name
+docker compose exec -it postgres psql -U btc_yield_user -d btc_yield
 ```
-docker-compose exec postgres psql -U btc_yield_user -d btc_yield
-```
+
 For a single loan, use `\x` to activate column view for better readability.
 
-```
+```bash
 SELECT * FROM loans WHERE loan_req_id = '3';
 ```
 
 The state of the collateral can be verified using the tx is (`collateral_commit_tx` in the `loans` table). The `vout` for 
 the collateral output is 1 (output 0 is origation fee)
 
-```
+```bash
 curl -X GET http://localhost:8001/utxo/collateral_commit_tx/1/details
 ```
 
 
-
+To clear all rows from all 3 tables when testing with restarts
+```bash
+docker exec btc-yield-postgres psql -U btc_yield_user -d btc_yield -c "TRUNCATE TABLE loans, borrower_signatures, users;"
+```
 
 
 
@@ -220,13 +229,3 @@ btc-yield/
 ├── python-api/            # Python FastAPI service
 └── ARCHITECTURE.md        # This document
 ```
-
-
-## 📚 **Documentation**
-
-- **[Backend Service](backend-service/README.md)** - Node.js API documentation
-- **[Backend Service Architecture](backend-service/ARCHITECTURE_DETAILED.md)** - Detailed backend service design
-- **[Python API](python-api/README.md)** - Python service documentation  
-- **[Configuration](config/README.md)** - Shared configuration system
-- **[BTC-Vaultero](btc-vaultero/)** - Bitcoin transaction package
-- **[Frontend](evm-dapp/)** - React/Wagmi application

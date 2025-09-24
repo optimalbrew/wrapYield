@@ -1,6 +1,6 @@
-# EVM yield vault using BTC-collateralized loans
+# BTC-collateralized loans on EVM chains (and maybe a vault)
 
-Note: There is also some documentation for the [architecture](./ARCHITECTURE.md) 
+Note: See the [architecture](./ARCHITECTURE.md) as well, which has a step by step quickstart for local testing / demo.
 
 This is a poc to implement a pathway for bitcoin holders to earn yield from an
 EVM chain without giving up complete control of BTC. The  BTC will remain 
@@ -19,6 +19,18 @@ of Ether - to avoid using an Oracle service for BTC:ETH price volatility.
 In that case, the erc20Swap HTLC contract  (from Boltz.exchange) should be used instead of etherswap.
 
 ## Repo Structure
+
+Overall Layout: 
+* Solidity contracts for loans on EVM chain loans in rBTC the native coin on rootstock
+* Tapscript based bitcoin "contracts" (HTLC + mutlsig + timelocks) to joint custody of colleteral 
+    * atomic locking of BTC collateral on loan activation (on EVM chain)
+    * atomic release of BTC collateral on loan repayment acceptance (on EVM chain)
+* centralized services 
+    * wagmi based DApp front-end
+        * anvil chain for EVM node
+    * which talks to express backend
+        * python-api for Bitcoin services -> connected to Bitcoin Core RPC
+        * postgres DB for loan lifecycle
 
 ### Loan Dapp
 The core solidity contracts are in `evmchain` which uses Foundry. The main loan contract uses

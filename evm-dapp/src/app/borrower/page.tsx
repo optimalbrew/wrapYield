@@ -1085,9 +1085,9 @@ export default function BorrowerPage() {
                         <div className="space-y-1 text-xs text-green-600">
                           <div>Preimage Hash Borrower: <code className="bg-green-100 px-1 rounded">{borrowerLoan.preimageHashBorrower || 'N/A'}</code></div>
                           <div>Preimage Hash Lender: <code className="bg-green-100 px-1 rounded">{borrowerLoan.preimageHashLender || 'N/A'}</code></div>
-                          <div>Offer Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.offerBlockheight || 'N/A'}</code></div>
-                          <div>Activation Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.activationBlockheight || 'N/A'}</code></div>
-                          <div>Repayment Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.repaymentBlockheight || 'N/A'}</code></div>
+                          <div>Offer Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.offerBlockheight ? Number(borrowerLoan.offerBlockheight) : 'N/A'}</code></div>
+                          <div>Activation Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.activationBlockheight ? Number(borrowerLoan.activationBlockheight) : 'N/A'}</code></div>
+                          <div>Repayment Block: <code className="bg-green-100 px-1 rounded">{borrowerLoan.repaymentBlockheight ? Number(borrowerLoan.repaymentBlockheight) : 'N/A'}</code></div>
                         </div>
                       </div>
                       <div>

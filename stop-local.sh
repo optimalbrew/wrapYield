@@ -13,6 +13,13 @@ if ! docker compose down; then
     echo "❌ Failed to stop backend service"
     exit 1
 fi
+
+# Delete PostgreSQL data volume
+echo "Deleting PostgreSQL data volume..."
+if ! docker volume rm backend-service_postgres_data 2>/dev/null; then
+    echo "⚠️ PostgreSQL volume not found or already deleted"
+fi
+
 cd ..
 
 # Stop Bitcoin Core (critical)

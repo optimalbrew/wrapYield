@@ -59,18 +59,9 @@ npm run dev
 - **`users`** - User management (lenders & borrowers)
 - **`loans`** - Loan lifecycle tracking
 - **`bitcoin_transactions`** - Bitcoin transaction records
-- **`signatures`** - Bitcoin signature storage for separate signing workflow
 - **`borrower_signatures`** - Simple borrower signature storage (id, loan_id, signature_data, created_at)
-- **`evm_transactions`** - EVM contract interaction tracking
-- **`loan_events`** - Audit trail of loan state changes
 
 ### Key Features
-
-- **UUID primary keys** for all tables
-- **JSONB metadata** for flexible data storage
-- **Decimal precision** for Bitcoin/Ethereum amounts
-- **Comprehensive indexing** for performance
-- **Foreign key relationships** for data integrity
 
 ## 🔗 API Endpoints
 
@@ -318,38 +309,6 @@ GET /api/signatures/stats
 GET /api/bitcoin-transactions/stats
 ```
 
-## 🚧 Development Roadmap
-
-### Phase 1: Core Infrastructure ✅
-- [x] Database schema design
-- [x] Signature workflow APIs
-- [x] Bitcoin transaction APIs
-- [x] Docker setup
-
-### Phase 2: Bitcoin Integration
-- [ ] `btc-vaultero` Python process integration
-- [ ] Bitcoin network broadcasting
-- [ ] Transaction confirmation monitoring
-- [ ] Error handling & retries
-
-### Phase 3: EVM Integration
-- [ ] Smart contract event monitoring
-- [ ] Cross-chain state synchronization
-- [ ] Automated loan lifecycle management
-
-### Phase 4: Production Features
-- [ ] Authentication & authorization
-- [ ] Rate limiting & security
-- [ ] Comprehensive logging
-- [ ] Performance optimization
-
-## 🤝 Contributing
-
-1. Follow existing code patterns
-2. Add proper TypeScript types
-3. Include error handling
-4. Test signature workflows
-5. Update documentation
 
 ## 📚 Related
 
