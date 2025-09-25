@@ -12,10 +12,15 @@ verification. Python api is built using `bitcoinutils` which requires 3.10.
 note: the scripts `start-local.sh` and `stop-local.sh` can be used to start/stop all services
 
 1. Start a local anvil (Ethereum) from any terminal. For determinstic anvil accounts and testing, I use a fixed seed 
+the lender address gets associated with this mnemonic - so we need to import it 
 
 ```bash
 anvil --mnemonic-seed-unsafe 2
+# copy the seed phrase into browser wallet!
 ```
+
+
+
 2. Deploy the smart contracts (`BtcCollateralLoan` and `EtherSwap`). Do this from the `evmchain/` directory using the 
 following script and the first anvil account's private key
 
