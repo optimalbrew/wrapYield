@@ -9,7 +9,10 @@ Clone the repo. I assume you have Foundry installed for smart contract developme
 to install rust first. Most services run in docker. The project requires node: we use WAGMI for the dApp front end, and express for backend. Python 3.10+ is required for the bitcoin taproot scripts, addresses, transaction construction, signing and signature
 verification. Python api is built using `bitcoinutils` which requires 3.10.
 
-note: the scripts `start-local.sh` and `stop-local.sh` can be used to start/stop all services
+note: the scripts `start-local.sh` and `stop-local.sh` can be used to start/stop all service. Running `start-local.sh`
+will copy the `.env` files, build docker images etc. 
+
+
 
 1. Start a local anvil (Ethereum) from any terminal. For determinstic anvil accounts and testing, I use a fixed seed 
 the lender address gets associated with this mnemonic - so we need to import it 

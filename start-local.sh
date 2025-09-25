@@ -39,7 +39,7 @@ sleep 5
 # Start DApp in background
 echo "Starting DApp..."
 cd ../evm-dapp
-cp ../evm-dapp/.env.local ../evm-dapp/.env
+cp .env.local.backup .env.local
 npm install
 npm run dev &
 
